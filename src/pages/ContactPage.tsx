@@ -1,10 +1,52 @@
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Seo } from "../components/Seo";
 import { services } from "../data/services";
 import { siteConfig } from "../data/site";
 
 export function ContactPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const topics = formData.getAll("topics");
+
+    if (topics.length === 0) {
+      form.reportValidity();
+      setStatus("error");
+      return;
+    }
+
+    setStatus("sending");
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          email: formData.get("email"),
+          clientType: formData.get("clientType"),
+          inquiryType: topics.join("、"),
+          message: formData.get("message")
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to submit contact form.");
+      }
+
+      form.reset();
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
+  };
 
   return (
     <>
@@ -22,13 +64,10 @@ export function ContactPage() {
             className="contact-form"
             name="contact"
             method="POST"
-            data-netlify="true"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setSubmitted(true);
-            }}
+            onSubmit={handleSubmit}
           >
-            {submitted ? <p className="form-success">送信完了しました</p> : null}
+            {status === "sent" ? <p className="form-success">送信しました。</p> : null}
+            {status === "error" ? <p className="form-success">送信できませんでした。必須項目を確認するか、送信先メールアドレスへ直接ご連絡ください。</p> : null}
             <input type="hidden" name="form-name" value="contact" />
             <label>
               名前 <span>必須</span>
@@ -58,7 +97,7 @@ export function ContactPage() {
               メッセージ <span>必須</span>
               <textarea name="message" rows={8} required />
             </label>
-            <button className="button primary" type="submit">送信する</button>
+            <button className="button primary" type="submit" disabled={status === "sending"}>{status === "sending" ? "送信中" : "送信する"}</button>
           </form>
           <aside className="contact-aside">
             <h2>送信先</h2>

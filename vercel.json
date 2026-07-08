@@ -33,7 +33,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|images/|favicon.svg).*)",
+      "source": "/((?!api/|assets/|images/|favicon.svg).*)",
       "destination": "/index.html"
     }
   ]

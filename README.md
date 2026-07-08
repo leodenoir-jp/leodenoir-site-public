@@ -130,8 +130,12 @@ snsLinks: [
 
 ## 問い合わせフォーム
 
-Contactページのフォームは仮実装です。現在は送信完了表示のみ行います。
+Contactページのフォームは Vercel Functions の `/api/contact` へ送信し、Resend 経由でメール送信します。
 
-外部フォームへ接続する場合は、`src/pages/ContactPage.tsx` の `form` の `action` や送信処理、または `.env` の `VITE_CONTACT_FORM_ENDPOINT` を使う実装へ変更してください。
+Vercelの Project Settings → Environment Variables に以下を設定してください。
+
+- `RESEND_API_KEY`: Resend のAPIキー
+- `CONTACT_TO_EMAIL`: 問い合わせの受信先メールアドレス
+- `CONTACT_FROM_EMAIL`: Resendで送信元として利用するメールアドレス
 
 送信先メールアドレス: `yu.leobiz003@outlook.com`

@@ -1,0 +1,40 @@
+{
+  "redirects": [
+    {
+      "source": "/external/personal-counseling",
+      "destination": "https://timerex.net/s/lom.leo39081_a90e/a24ea840/",
+      "permanent": false
+    },
+    {
+      "source": "/external/online-japanese-lesson",
+      "destination": "https://jp.amazingtalker.com/teachers-and-tutors/yui-usami",
+      "permanent": false
+    },
+    {
+      "source": "/external/english-pronunciation-coaching",
+      "destination": "https://jp.amazingtalker.com/teachers-and-tutors/yui-usami",
+      "permanent": false
+    },
+    {
+      "source": "/external/youtube",
+      "destination": "https://www.youtube.com/@leo_de_noir_workaholicowl",
+      "permanent": false
+    },
+    {
+      "source": "/external/tiktok",
+      "destination": "https://www.tiktok.com/@lomleo.liver555",
+      "permanent": false
+    },
+    {
+      "source": "/external/note",
+      "destination": "https://note.com/leotimez555",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!assets/|favicon.svg).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

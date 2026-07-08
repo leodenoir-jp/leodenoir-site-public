@@ -1,0 +1,10 @@
+node_modules
+dist
+.pnpm-store
+.agents
+.vercel
+.env
+.DS_Store
+npm-debug.log*
+*.log
+vite.config.ts.timestamp-*

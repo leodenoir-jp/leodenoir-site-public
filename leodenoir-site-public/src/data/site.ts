@@ -2,7 +2,7 @@ export const siteConfig = {
   siteName: "Leo de Noir｜Workaholic Owl 公式サイト",
   brandName: "Leo de Noir",
   officialName: "Leo de Noir / Workaholic Owl",
-  logoPath: "/assets/images/ldn-logo.png",
+  logoPath: "/images/ldn-logo.png",
   organization: "Workaholic Owl",
   operator: "請井 悠貴子",
   url: "https://leodenoir.com",

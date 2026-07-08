@@ -63,7 +63,7 @@ Vercelでは、`pnpm-lock.yaml` があるため pnpm プロジェクトとして
 ```text
 .
 ├── public/
-│   ├── assets/images/        # 差し替え用画像プレースホルダー
+│   ├── images/               # 差し替え用画像
 │   ├── _redirects            # Netlify用SPAフォールバック
 │   └── favicon.svg
 ├── src/
@@ -120,7 +120,7 @@ snsLinks: [
 
 ## 画像の差し替え
 
-画像は `public/assets/images/` にまとめています。
+画像は `public/images/` にまとめています。
 
 - `profile-placeholder.svg`: About Me のプロフィール画像
 - `service-placeholder.svg`: サービスカード・詳細ページの仮画像

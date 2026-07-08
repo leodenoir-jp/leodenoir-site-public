@@ -17,7 +17,7 @@ export function AboutPage({ route }: { route: Route }) {
       </section>
       <section className="section">
         <div className="container profile-layout">
-          <img src="/assets/images/operator-profile.png" alt="請井 悠貴子のプロフィール写真" />
+          <img src="/images/operator-profile.png" alt="請井 悠貴子のプロフィール写真" />
           <div>
             <SectionHeader eyebrow="Profile" title="請井 悠貴子（うけい ゆきこ）" />
             <p>

@@ -10,7 +10,7 @@ export function Seo({ title, description }: SeoProps) {
   useEffect(() => {
     const pageTitle = `${title}｜${siteConfig.brandName}`;
     const canonicalUrl = `${siteConfig.url}${window.location.pathname === "/" ? "/" : window.location.pathname}`;
-    const ogImage = `${siteConfig.url}/assets/images/ogp-placeholder.svg`;
+    const ogImage = `${siteConfig.url}/images/ogp-placeholder.svg`;
 
     document.title = pageTitle;
     setMeta("description", description);

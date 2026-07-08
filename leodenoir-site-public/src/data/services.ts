@@ -21,7 +21,7 @@ export type Service = {
   externalUrl?: string;
 };
 
-const placeholder = "/assets/images/service-placeholder.svg";
+const placeholder = "/images/service-placeholder.svg";
 
 export const services: Service[] = [
   {
@@ -30,7 +30,7 @@ export const services: Service[] = [
     title: "人的資本経営コンサルティング",
     price: "応相談",
     summary: "制度ではなく、現場で機能する人的資本経営を支援します。",
-    image: "/assets/images/service_human-capital-consulting.png",
+    image: "/images/service_human-capital-consulting.png",
     catchCopy: "人が自律して動き出す組織へ。制度ではなく、現場で機能する人的資本経営を。",
     overview: [
       "人的資本経営コンサルティングは、組織における人材・チーム・管理職・職場環境の課題を整理し、人が自律的に力を発揮できる状態を目指す法人向け支援サービスです。",
@@ -91,7 +91,7 @@ export const services: Service[] = [
     title: "ビジネス研修設計",
     price: "応相談",
     summary: "現場の行動変容につながる学びを設計します。",
-    image: "/assets/images/service_business-training-design.png",
+    image: "/images/service_business-training-design.png",
     catchCopy: "研修を、やりっぱなしで終わらせない。現場の行動変容につながる学びを設計します。",
     overview: [
       "ビジネス研修設計は、組織課題や受講者の状態に合わせて、研修の目的・構成・内容・ワーク・資料設計を行う法人向けサービスです。",
@@ -160,7 +160,7 @@ export const services: Service[] = [
     title: "ビジネス研修講師",
     price: "応相談",
     summary: "現場で使える行動へつなげる研修を行います。",
-    image: "/assets/images/service_business-training-instructor.png",
+    image: "/images/service_business-training-instructor.png",
     catchCopy: "知識を伝えるだけでなく、現場で使える行動へつなげる研修を。",
     overview: [
       "ビジネス研修講師は、法人・団体向けに、管理職育成、リーダーシップ開発、人材育成、コミュニケーション、メンタルヘルス・マネジメント等をテーマとした研修・講義を行うサービスです。",
@@ -226,7 +226,7 @@ export const services: Service[] = [
     title: "ライフ=キャリアコーチング",
     price: "月額 50,000円",
     summary: "キャリアの転換期にある方が、自分の意思で次の道を選ぶための伴走型コーチングです。",
-    image: "/assets/images/service_life-career-coaching.png",
+    image: "/images/service_life-career-coaching.png",
     catchCopy: "自分の意思で、キャリアを選び取る。仕事と人生のハンドルを、もう一度自分の手に。",
     overview: [
       "キャリアの転換期にある方が、自分の意思で次の道を選び取れるよう、思考・感情・行動を整理する一対一の伴走型コーチングです。",
@@ -273,7 +273,7 @@ export const services: Service[] = [
     title: "個別カウンセリング",
     price: "50分 9,000円",
     summary: "誰にも話せなかった想いや言葉にしきれない感情を、対話を通して整理します。",
-    image: "/assets/images/service_personal-counseling.png",
+    image: "/images/service_personal-counseling.png",
     externalUrl: "/external/personal-counseling",
     catchCopy: "誰にも話せなかった想いを、安心できる場所で。思考をほどき、次の一歩を一緒に整理します。",
     overview: [
@@ -336,7 +336,7 @@ export const services: Service[] = [
     title: "オンライン日本語レッスン",
     price: "外部サイトに記載",
     summary: "仕事や日常で自然に使える日本語表現力を磨くオンラインレッスンです。",
-    image: "/assets/images/service_online-japanese-lesson.png",
+    image: "/images/service_online-japanese-lesson.png",
     externalUrl: "/external/online-japanese-lesson",
     catchCopy: "知っている日本語から、伝わる日本語へ。仕事や日常で自然に使える表現力を磨きます。",
     overview: [
@@ -403,7 +403,7 @@ export const services: Service[] = [
     title: "オンライン英語発音コーチング",
     price: "外部サイトに記載",
     summary: "日本語話者が、より自然に聞き取りやすく伝わる英語を話すための発音特化型レッスンです。",
-    image: "/assets/images/service_english-pronunciation-coaching.png",
+    image: "/images/service_english-pronunciation-coaching.png",
     externalUrl: "/external/english-pronunciation-coaching",
     catchCopy: "伝わる英語は、発音から整える。日本語話者のための、実践型発音コーチング。",
     overview: [
@@ -467,7 +467,7 @@ export const services: Service[] = [
     title: "不動産終活相談",
     price: "30分 1,000円",
     summary: "家や土地のこれからを早めに整理する、不動産終活の初期相談です。",
-    image: "/assets/images/service_real-estate-life-ending-consultation.png",
+    image: "/images/service_real-estate-life-ending-consultation.png",
     catchCopy: "家や土地のこれからを、早めに整理する。不動産の終活を、まずは気軽に相談できる入口へ。",
     overview: [
       "不動産終活相談は、相続や将来の暮らしを見据えて、不動産に関する不安や疑問を整理するための相談サービスです。",
@@ -535,7 +535,7 @@ export const services: Service[] = [
     title: "タロットカード鑑定",
     price: "",
     summary: "思考整理と自己理解の補助として、選択や現在地を見つめる鑑定です。",
-    image: "/assets/images/service_tarot-card-reading.png",
+    image: "/images/service_tarot-card-reading.png",
     catchCopy: "未来を決めつけるのではなく、今のあなたを映し、次の一歩を整理する。",
     overview: [
       "タロットカード鑑定は、現在の状況、感情、思考、選択肢を整理するための対話型セッションです。",
@@ -593,7 +593,7 @@ export const services: Service[] = [
     title: "音声制作・ナレーション",
     price: "応相談",
     summary: "動画、広告、配信、教材、朗読、案内音声などに使用する音声を制作します。",
-    image: "/assets/images/service_voice-production-narration.png",
+    image: "/images/service_voice-production-narration.png",
     catchCopy: "言葉に、声の輪郭を。伝えたい世界観を、音声で届けます。",
     overview: [
       "音声制作・ナレーションは、動画、広告、配信、教材、朗読、案内音声などに使用する音声を制作するサービスです。",

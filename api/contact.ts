@@ -65,6 +65,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const fromEmail = process.env.CONTACT_FROM_EMAIL;
 
   if (!resendApiKey || !toEmail || !fromEmail) {
+    console.error("Contact API configuration error: required mail environment variables are missing.");
     return res.status(500).json({ message: "Mail environment variables are not configured." });
   }
 
@@ -111,23 +112,38 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     <p>${escapeHtml(message).replace(/\n/g, "<br />")}</p>
   `;
 
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: [toEmail],
-      reply_to: email,
-      subject: `Webサイトからのお問い合わせ: ${name}`,
-      text,
-      html
-    })
-  });
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: toEmail,
+        reply_to: email,
+        subject: "お問い合わせがありました",
+        text,
+        html
+      })
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("Resend email send failed.", {
+        status: response.status,
+        statusText: response.statusText,
+        errorBody
+      });
+
+      return res.status(500).json({ message: "Failed to send email." });
+    }
+  } catch (error) {
+    console.error("Resend email request failed.", {
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+
     return res.status(500).json({ message: "Failed to send email." });
   }
 

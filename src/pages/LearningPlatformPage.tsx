@@ -1,6 +1,7 @@
-import { type FormEvent, useMemo, useState } from "react";
+﻿import { type FormEvent, useMemo, useState } from "react";
 import type { Route } from "../App";
 import { Seo } from "../components/Seo";
+import { importedLessonReviews } from "../data/lessonReviews";
 import {
   type BookingRecord,
   type BookingStatus,
@@ -38,7 +39,7 @@ type BookingFormState = {
 
 type RequestChange = {
   bookingId: string;
-  type: "reschedule_requested";
+  type: "reschedule_requested" | "cancel_requested";
   reason: string;
 };
 
@@ -49,7 +50,6 @@ type LessonReview = {
   rating: 1 | 2 | 3 | 4 | 5;
   comment: string;
   postedAt: string;
-  source: "AmazingTalker" | "Site";
   status: "approved" | "pending";
 };
 
@@ -78,7 +78,6 @@ const studentEmailKey = "ldn-platform-student-email";
 const availabilityStorageKey = "ldn-platform-tutor-availability";
 const ownerEmail = "yu.leobiz003@outlook.com";
 
-const importedAmazingTalkerReviews: LessonReview[] = [];
 const initialBlockedStudents = ["blocked.student@example.com"];
 const weekDayLabels = [
   { value: 0, label: "日" },
@@ -90,6 +89,37 @@ const weekDayLabels = [
   { value: 6, label: "土" }
 ];
 const availabilityDurationOptions = [25, 50, 75];
+
+type PlatformNotification = {
+  name: string;
+  email: string;
+  inquiryType: string;
+  message: string;
+};
+
+async function sendPlatformNotification({ name, email, inquiryType, message }: PlatformNotification) {
+  try {
+    const response = await fetch("/api/contact", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        clientType: "個人",
+        inquiryType,
+        message
+      })
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 const initialAvailabilitySlots: TutorAvailabilitySlot[] = [
   {
     id: "AV-1001",
@@ -182,7 +212,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   const [bookingForm, setBookingForm] = useState<BookingFormState>(initialBookingForm);
   const [bookingMessage, setBookingMessage] = useState("");
   const [blockedStudents, setBlockedStudents] = useState<string[]>(initialBlockedStudents);
-  const [reviews, setReviews] = useState<LessonReview[]>(importedAmazingTalkerReviews);
+  const [reviews, setReviews] = useState<LessonReview[]>(importedLessonReviews);
   const [availabilitySlots, setAvailabilitySlotsBase] = useState<TutorAvailabilitySlot[]>(() => {
     const saved = window.localStorage.getItem(availabilityStorageKey);
     if (!saved) return initialAvailabilitySlots;
@@ -213,7 +243,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     window.localStorage.setItem(availabilityStorageKey, JSON.stringify(slots));
   };
 
-  const submitBooking = (event: FormEvent<HTMLFormElement>) => {
+  const submitBooking = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const emailForRequest = (bookingForm.email || studentEmail).trim().toLowerCase();
     const nameForRequest = bookingForm.name.trim();
@@ -254,12 +284,36 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       creditAction: "hold"
     }));
 
+    const notificationSent = await sendPlatformNotification({
+      name: nameForRequest,
+      email: emailForRequest,
+      inquiryType: "Learning予約リクエスト",
+      message: [
+        "Learningページから予約リクエストが送信されました。",
+        "",
+        `生徒名: ${nameForRequest}`,
+        `メールアドレス: ${emailForRequest}`,
+        `レッスン種別: ${lessonKind === "japanese" ? "1on1日本語レッスン" : "英語発音コーチング"}`,
+        `レッスンメニュー: ${menu.name}`,
+        `リクエスト種別: ${requestGroupLabel}`,
+        "",
+        "候補枠:",
+        ...requestedSlots.map((slot) => `- ${formatAvailabilityRange(slot)} / ${slot.deliveryMode === "online" ? "オンライン" : "対面"} / ${slot.timezone}`),
+        "",
+        `目的・相談内容: ${bookingForm.purpose || "未記入"}`
+      ].join("\n")
+    });
+
     setBookings((current) => [...nextBookings, ...current]);
     setStudentEmail(emailForRequest);
     window.localStorage.setItem(studentEmailKey, emailForRequest);
     setBookingForm({ ...initialBookingForm, name: nameForRequest, email: emailForRequest, lessonMenuId: lessonKind === "japanese" ? "jp-trial" : "en-trial" });
     setChangeRequest((current) => ({ ...current, bookingId: nextBookings[0].id }));
-    setBookingMessage(`${nextBookings.length}件の予約リクエストを作成しました。講師承認後に予約確定となります。`);
+    setBookingMessage(
+      notificationSent
+        ? `${nextBookings.length}件の予約リクエストを作成し、運営者へメール通知しました。講師承認後に予約確定となります。`
+        : `${nextBookings.length}件の予約リクエストを作成しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`
+    );
   };
 
   const updateBookingStatus = (bookingId: string, status: BookingStatus, reason?: string) => {
@@ -278,7 +332,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     );
   };
 
-  const submitChangeRequest = (event: FormEvent<HTMLFormElement>) => {
+  const submitChangeRequest = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!changeRequest.bookingId || !changeRequest.reason.trim()) {
@@ -286,8 +340,32 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       return;
     }
 
-    updateBookingStatus(changeRequest.bookingId, "reschedule_requested", changeRequest.reason.trim());
-    setBookingMessage("日程変更リクエストを記録しました。講師の承認があるまで予定は変更されません。");
+    const booking = bookings.find((item) => item.id === changeRequest.bookingId);
+    const requestLabel = changeRequest.type === "cancel_requested" ? "キャンセル" : "日程変更";
+    const notificationSent = await sendPlatformNotification({
+      name: booking?.student ?? "Student",
+      email: booking?.studentEmail ?? studentEmail,
+      inquiryType: "Learning日程変更・キャンセルリクエスト",
+      message: [
+        `Learningページから${requestLabel}リクエストが送信されました。`,
+        "",
+        `リクエスト種別: ${requestLabel}`,
+        `予約ID: ${changeRequest.bookingId}`,
+        `対象日時: ${booking ? `${formatDateTime(booking.requestedSlot)} (${booking.timezone})` : "未確認"}`,
+        `生徒名: ${booking?.student ?? "未確認"}`,
+        `メールアドレス: ${booking?.studentEmail ?? studentEmail}`,
+        "",
+        "理由:",
+        changeRequest.reason.trim()
+      ].join("\n")
+    });
+
+    updateBookingStatus(changeRequest.bookingId, changeRequest.type, changeRequest.reason.trim());
+    setBookingMessage(
+      notificationSent
+        ? `${requestLabel}リクエストを記録し、運営者へメール通知しました。講師の承認があるまで予定は変更されません。`
+        : `${requestLabel}リクエストを記録しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`
+    );
     setChangeRequest((current) => ({ ...current, reason: "" }));
   };
 
@@ -746,12 +824,36 @@ function PurchaseDialog({
   const receiptEmailNormalized = receiptEmail.trim().toLowerCase();
   const isBlocked = Boolean(receiptEmailNormalized && blockedStudents.includes(receiptEmailNormalized));
 
-  const savePurchaseDraft = () => {
+  const savePurchaseDraft = async () => {
     if (isBlocked) {
       setPurchaseMessage("このメールアドレスからのレッスン購入は受付できません。");
       return;
     }
-    setPurchaseMessage("購入内容確認を保存しました。実決済は決済サービス接続後に有効化します。");
+
+    const notificationSent = await sendPlatformNotification({
+      name: receiptName || "Lesson purchase draft",
+      email: receiptEmail,
+      inquiryType: "Learning購入内容確認",
+      message: [
+        "Learningページから購入内容確認が送信されました。",
+        "",
+        `コース: ${selectedMenuText.category}：${selectedMenuText.name}`,
+        `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
+        `時間: ${bookingForm.durationMinutes}${text.minutes}`,
+        `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
+        `金額目安: ${priceSummary}`,
+        `支払い方法: ${paymentMethod}`,
+        `領収書宛名: ${receiptName || "未入力"}`,
+        `送付先メール: ${receiptEmail || "未入力"}`,
+        `領収書番号: ${receiptNumber}`
+      ].join("\n")
+    });
+
+    setPurchaseMessage(
+      notificationSent
+        ? "購入内容確認を保存し、運営者へメール通知しました。実決済は決済サービス接続後に有効化します。"
+        : "購入内容確認を保存しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。"
+    );
   };
 
   return (
@@ -866,7 +968,7 @@ function BookingRequestCard({
   blockedStudents: string[];
   bookingForm: BookingFormState;
   setBookingForm: (form: BookingFormState) => void;
-  submitBooking: (event: FormEvent<HTMLFormElement>) => void;
+  submitBooking: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   bookingMessage: string;
 }) {
   const lessonKind = getBookingLessonKind(bookingForm);
@@ -1039,8 +1141,7 @@ function LessonReviewPage({
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5>(5);
   const [comment, setComment] = useState("");
   const isOwner = studentEmail.toLowerCase() === ownerEmail;
-  const importedReviews = reviews.filter((review) => review.source === "AmazingTalker" && review.status === "approved" && review.rating === 5);
-  const siteApprovedReviews = reviews.filter((review) => review.source === "Site" && review.status === "approved");
+  const approvedReviews = reviews.filter((review) => review.status === "approved");
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const text = getReviewCopy(language);
 
@@ -1054,7 +1155,6 @@ function LessonReviewPage({
       rating,
       comment: comment.trim(),
       postedAt: new Date().toISOString(),
-      source: "Site",
       status: "pending"
     };
     setReviews([nextReview, ...reviews]);
@@ -1076,28 +1176,11 @@ function LessonReviewPage({
         <p className="platform-badge">Approved reviews only</p>
       </div>
 
-      <section className="platform-card">
-        <h3>{text.importedTitle}</h3>
-        <p className="platform-muted">{text.importedNote}</p>
-        <div className="review-grid">
-          {importedReviews.length > 0 ? importedReviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
-          )) : <p className="platform-muted">{text.noImported}</p>}
+      <form className="platform-card platform-form review-form-compact" onSubmit={submitReview}>
+        <div>
+          <h3>{text.formTitle}</h3>
+          <p className="platform-muted">{text.approvalRule}</p>
         </div>
-      </section>
-
-      <section className="platform-card">
-        <h3>{text.siteTitle}</h3>
-        <div className="review-grid">
-          {siteApprovedReviews.length > 0 ? siteApprovedReviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
-          )) : <p className="platform-muted">{text.noSite}</p>}
-        </div>
-      </section>
-
-      <form className="platform-card platform-form" onSubmit={submitReview}>
-        <h3>{text.formTitle}</h3>
-        <p className="platform-muted">{text.approvalRule}</p>
         <div className="platform-grid two">
           <label>
             {text.name}
@@ -1108,22 +1191,34 @@ function LessonReviewPage({
             <input type="email" value={reviewEmail} onChange={(event) => setReviewEmail(event.target.value)} />
           </label>
         </div>
-        <fieldset className="rating-picker">
-          <legend>{text.rating}</legend>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button key={star} className={star <= rating ? "active" : ""} type="button" onClick={() => setRating(star as 1 | 2 | 3 | 4 | 5)}>
-              ★
-            </button>
-          ))}
-        </fieldset>
+        <div className="review-form-inline">
+          <fieldset className="rating-picker">
+            <legend>{text.rating}</legend>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button key={star} className={star <= rating ? "active" : ""} type="button" onClick={() => setRating(star as 1 | 2 | 3 | 4 | 5)}>
+                ★
+              </button>
+            ))}
+          </fieldset>
+          <button className="button primary" type="submit">
+            {text.submit}
+          </button>
+        </div>
         <label>
           {text.comment}
-          <textarea value={comment} rows={5} onChange={(event) => setComment(event.target.value)} required />
+          <textarea value={comment} rows={3} onChange={(event) => setComment(event.target.value)} required />
         </label>
-        <button className="button primary" type="submit">
-          {text.submit}
-        </button>
       </form>
+
+      <section className="platform-card">
+        <h3>{text.reviewsTitle}</h3>
+        <p className="platform-muted">{text.reviewsNote}</p>
+        <div className="review-grid">
+          {approvedReviews.length > 0 ? approvedReviews.map((review) => (
+            <ReviewCard key={review.id} review={review} />
+          )) : <p className="platform-muted">{text.noReviews}</p>}
+        </div>
+      </section>
 
       {isOwner ? (
         <section className="platform-card">
@@ -1153,7 +1248,7 @@ function ReviewCard({ review }: { review: LessonReview }) {
       <p>{review.comment}</p>
       <footer>
         <strong>{review.studentName}</strong>
-        <span>{formatDateTime(review.postedAt)} / {review.source}</span>
+        <span>{formatDateTime(review.postedAt)}</span>
       </footer>
     </article>
   );
@@ -1452,10 +1547,10 @@ function StudentDashboard({
   setBlockedStudents: (emails: string[]) => void;
   bookingForm: BookingFormState;
   setBookingForm: (form: BookingFormState) => void;
-  submitBooking: (event: FormEvent<HTMLFormElement>) => void;
+  submitBooking: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   changeRequest: RequestChange;
   setChangeRequest: (request: RequestChange) => void;
-  submitChangeRequest: (event: FormEvent<HTMLFormElement>) => void;
+  submitChangeRequest: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   bookingMessage: string;
 }) {
   const [loginEmail, setLoginEmail] = useState(studentEmail);
@@ -1477,13 +1572,24 @@ function StudentDashboard({
         renewalDue: "未設定"
       };
 
-  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextEmail = loginEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
     setStudentEmail(nextEmail);
     setBookingForm({ ...bookingForm, email: nextEmail });
     window.localStorage.setItem(studentEmailKey, nextEmail);
+    await sendPlatformNotification({
+      name: "Student dashboard login",
+      email: nextEmail,
+      inquiryType: "Learning生徒ログイン登録",
+      message: [
+        "Learningページで生徒ダッシュボードへのログイン登録がありました。",
+        "",
+        `登録メールアドレス: ${nextEmail}`,
+        `登録日時: ${new Date().toISOString()}`
+      ].join("\n")
+    });
   };
 
   const toggleAvailabilitySlot = (slot: TutorAvailabilitySlot) => {
@@ -1592,9 +1698,16 @@ function StudentDashboard({
         </section>
 
         <form className="platform-card platform-form" onSubmit={submitChangeRequest}>
-          <h3>日程変更リクエスト</h3>
+          <h3>日程変更・キャンセルリクエスト</h3>
           <p className="platform-muted">生徒側からレッスン予定を直接キャンセルすることはできません。日程変更も、講師の承認があるまで確定しません。</p>
           {bookingMessage ? <p className="form-success">{bookingMessage}</p> : null}
+          <label>
+            リクエスト種別
+            <select value={changeRequest.type} onChange={(event) => setChangeRequest({ ...changeRequest, type: event.target.value as RequestChange["type"] })}>
+              <option value="reschedule_requested">日程変更</option>
+              <option value="cancel_requested">キャンセル</option>
+            </select>
+          </label>
           <label>
             対象予約
             <select value={changeRequest.bookingId} onChange={(event) => setChangeRequest({ ...changeRequest, bookingId: event.target.value })}>
@@ -1628,13 +1741,6 @@ function StudentDashboard({
             </article>
           )) : <p className="platform-muted">このメールアドレスに紐づくデモ予約はまだありません。</p>}
         </div>
-      </section>
-
-      <section className="platform-card">
-        <h3>Chat / Files / Message feasibility</h3>
-        <div className="message-bubble">予約サイト内チャットを実運用するには、ログイン認証、ユーザーID、永続DB、ファイルストレージ、通知処理が必要です。</div>
-        <div className="file-drop">V1ではメールによる日程変更リクエスト・ファイル送付が最も安全です。サイト内で完結させる場合は、DB保存型メッセージ機能とファイルストレージを追加します。</div>
-        <p className="platform-note">IPアドレスによる個人判定は共有回線・VPN・端末変更で不安定なため、本人確認には使わない方針です。</p>
       </section>
 
       {selectedBooking ? (
@@ -2050,12 +2156,10 @@ function getReviewCopy(language: PlatformLanguage) {
   const copies = {
     ja: {
       title: "レッスンレビュー",
-      summary: "承認済みのレビューのみ掲載します。AmazingTalkerから取得したレビューは、URLと取得許可を確認後に反映できます。",
-      importedTitle: "AmazingTalker 5つ星レビュー",
-      importedNote: "2026年7月25日時点の取得データをここに表示する想定です。現時点ではプロフィールURLと取得データが未設定です。",
-      noImported: "取り込み済みレビューはまだありません。",
-      siteTitle: "サイト内レビュー",
-      noSite: "掲載中のサイト内レビューはまだありません。",
+      summary: "Leoが承認したレビューのみ掲載します。",
+      reviewsTitle: "レッスンレビュー",
+      reviewsNote: "受講者から寄せられたレビューを掲載しています。",
+      noReviews: "掲載中のレビューはまだありません。",
       formTitle: "新しいレビューを書く",
       approvalRule: "投稿されたレビューは、講師の承認後に掲載されます。",
       name: "表示名",
@@ -2066,12 +2170,10 @@ function getReviewCopy(language: PlatformLanguage) {
     },
     en: {
       title: "Lesson Reviews",
-      summary: "Only approved reviews are displayed. AmazingTalker reviews can be imported after the profile URL and collection permission are confirmed.",
-      importedTitle: "AmazingTalker 5-star reviews",
-      importedNote: "Imported reviews as of July 25, 2026 will appear here. The profile URL and review data are not configured yet.",
-      noImported: "No imported reviews yet.",
-      siteTitle: "Site reviews",
-      noSite: "No approved site reviews yet.",
+      summary: "Only reviews approved by Leo are displayed.",
+      reviewsTitle: "Lesson Reviews",
+      reviewsNote: "Reviews from students are shown here after approval.",
+      noReviews: "No reviews are published yet.",
       formTitle: "Write a new review",
       approvalRule: "Submitted reviews are published only after tutor approval.",
       name: "Display name",
@@ -2082,12 +2184,10 @@ function getReviewCopy(language: PlatformLanguage) {
     },
     "zh-Hant": {
       title: "課程評價",
-      summary: "只會顯示已核准的評價。確認 AmazingTalker 個人頁面網址與取得許可後，可匯入評價。",
-      importedTitle: "AmazingTalker 五星評價",
-      importedNote: "2026年7月25日取得的評價將顯示於此。目前尚未設定個人頁面網址與資料。",
-      noImported: "尚無匯入評價。",
-      siteTitle: "站內評價",
-      noSite: "尚無已公開的站內評價。",
+      summary: "只會顯示 Leo 核准的評價。",
+      reviewsTitle: "課程評價",
+      reviewsNote: "此處刊登學生留下並經核准的評價。",
+      noReviews: "目前尚無公開評價。",
       formTitle: "留下新的評價",
       approvalRule: "提交的評價需經教師核准後才會公開。",
       name: "顯示名稱",
@@ -2290,3 +2390,4 @@ function isPastBooking(value: string) {
   if (Number.isNaN(date.getTime())) return false;
   return date.getTime() < Date.now();
 }
+

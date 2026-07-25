@@ -1322,6 +1322,24 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.review-form-compact {
+  gap: 12px;
+  padding: 18px;
+}
+
+.review-form-compact h3,
+.review-form-compact p {
+  margin-bottom: 0;
+}
+
+.review-form-inline {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .review-card,
 .review-card-pending {
   background: #fbfcfd;
@@ -1407,8 +1425,6 @@ textarea {
 }
 
 .video-placeholder,
-.file-drop,
-.message-bubble,
 .classification-box {
   background: var(--surface-muted);
   border: 1px solid var(--line);

@@ -93,23 +93,23 @@ export const platformUi = {
   ja: {
     requestLesson: "予約リクエストを送る",
     dashboard: "受講者ダッシュボード",
-    notLivePayment: "決済は未接続です。請求書・支払導線は設定後に有効化します。",
+    notLivePayment: "購入希望の送信後、内容確認のうえPayPalまたはPayPayの支払い案内をメールでお送りします。",
     timezone: "表示タイムゾーン",
-    approvalRequired: "講師承認後に予約確定"
+    approvalRequired: "日程調整後にご案内"
   },
   en: {
     requestLesson: "Send booking request",
     dashboard: "Student dashboard",
-    notLivePayment: "Payments are not live. Invoice and payment links activate after provider setup.",
+    notLivePayment: "After you send a purchase request, payment instructions for PayPal or PayPay will be shared by email.",
     timezone: "Display timezone",
-    approvalRequired: "Confirmed only after tutor approval"
+    approvalRequired: "Schedule details by email"
   },
   "zh-Hant": {
     requestLesson: "送出預約申請",
     dashboard: "學生儀表板",
-    notLivePayment: "付款尚未啟用。設定付款服務後才會開放發票與付款連結。",
+    notLivePayment: "送出購買申請後，將透過電子郵件提供 PayPal 或 PayPay 付款資訊。",
     timezone: "顯示時區",
-    approvalRequired: "需教師核准後才算預約成立"
+    approvalRequired: "日程確認後以郵件通知"
   }
 };
 
@@ -118,7 +118,7 @@ export const lessonProducts: LessonProduct[] = [
     kind: "japanese",
     path: "/learning/japanese",
     image: "/images/service_online-japanese-lesson.png",
-    demoVideoLabel: "Demo video placeholder: Japanese conversation lesson",
+    demoVideoLabel: "Japanese conversation lesson video",
     timezoneLabel: "Asia/Tokyo / learner local time shown together",
     copy: {
       ja: {
@@ -126,34 +126,34 @@ export const lessonProducts: LessonProduct[] = [
         title: "知っている日本語から、伝わる日本語へ。",
         summary: "仕事・面接・日常会話で自然に使える日本語を、目的に合わせて練習する1on1レッスンです。",
         outcomes: ["自然な言い換えと敬語", "面接・職場会話の練習", "発音・イントネーション確認", "日本語で考えを整理する力"],
-        method: ["予約はリクエスト制です", "講師が内容と時間を確認して承認します", "外部決済・請求は未接続のプレースホルダーです"]
+        method: ["オンライン・対面の受講形式に対応", "目的に合わせて内容を調整", "購入希望の送信後、PayPalまたはPayPayの支払い案内をメールでお送りします"]
       },
       en: {
         eyebrow: "1-on-1 Japanese Lessons",
         title: "Japanese that communicates.",
         summary: "A practical online lesson for interviews, work conversations, and natural daily communication.",
         outcomes: ["Natural phrasing and keigo", "Interview and workplace practice", "Pronunciation and intonation checks", "Organizing thoughts in Japanese"],
-        method: ["Booking is request-based", "The tutor reviews and approves each request", "Payment and invoice links are placeholders until configured"]
+        method: ["Online and in-person formats available", "Lesson content is adjusted to your goals", "Payment instructions for PayPal or PayPay are shared by email after review"]
       },
       "zh-Hant": {
         eyebrow: "線上日語課",
         title: "從知道日語，到能自然傳達。",
         summary: "依照面試、工作與日常溝通目標設計的實用線上日語課。",
         outcomes: ["自然表達與敬語", "面試與職場會話練習", "發音與語調確認", "用日語整理想法"],
-        method: ["預約採申請制", "教師確認內容與時間後核准", "付款與發票連結尚為未啟用佔位"]
+        method: ["可選擇線上或面對面課程", "依照學習目標調整內容", "確認購買申請後，將以電子郵件提供 PayPal 或 PayPay 付款資訊"]
       }
     },
     packageOptions: [
-      { id: "jp-trial", name: "Trial / Intake", lessons: 1, minutes: 25, priceLabel: "External platform or invoice placeholder", status: "draft" },
-      { id: "jp-4", name: "4 Lesson Package", lessons: 4, minutes: 50, priceLabel: "Invoice placeholder", status: "ready_for_invoice" },
-      { id: "jp-8", name: "8 Lesson Package", lessons: 8, minutes: 50, priceLabel: "Invoice placeholder", status: "ready_for_invoice" }
+      { id: "jp-trial", name: "Trial / Intake", lessons: 1, minutes: 25, priceLabel: "Payment details by email", status: "draft" },
+      { id: "jp-4", name: "4 Lesson Package", lessons: 4, minutes: 50, priceLabel: "Payment details by email", status: "ready_for_invoice" },
+      { id: "jp-8", name: "8 Lesson Package", lessons: 8, minutes: 50, priceLabel: "Payment details by email", status: "ready_for_invoice" }
     ]
   },
   {
     kind: "english",
     path: "/learning/english",
     image: "/images/service_english-pronunciation-coaching.png",
-    demoVideoLabel: "Demo video placeholder: English pronunciation coaching",
+    demoVideoLabel: "English pronunciation coaching video",
     timezoneLabel: "Asia/Tokyo / learner local time shown together",
     copy: {
       ja: {
@@ -161,27 +161,27 @@ export const lessonProducts: LessonProduct[] = [
         title: "伝わる英語は、発音から整える。",
         summary: "日本語話者が聞き返されにくい英語へ近づくための、口・舌・息・リズムに特化したオンラインコーチングです。",
         outcomes: ["日本語話者が苦手な音の整理", "面接・会議・プレゼンの音読練習", "録音フィードバック", "話す負担を減らす発音設計"],
-        method: ["予約はリクエスト制です", "講師が目的と練習内容を確認して承認します", "決済機能はプロバイダ設定後に有効化します"]
+        method: ["オンライン・対面の受講形式に対応", "目的に合わせて発音課題を整理", "購入希望の送信後、PayPalまたはPayPayの支払い案内をメールでお送りします"]
       },
       en: {
         eyebrow: "English Pronunciation Coaching",
         title: "Clearer English starts with pronunciation.",
         summary: "A focused online coaching program for Japanese speakers to improve clarity, rhythm, and confidence.",
         outcomes: ["Sounds Japanese speakers often struggle with", "Interview, meeting, and presentation read-aloud practice", "Recording-based feedback", "Pronunciation design that reduces speaking load"],
-        method: ["Booking is request-based", "The tutor approves after reviewing goals and practice scope", "Payments activate only after provider setup"]
+        method: ["Online and in-person formats available", "Pronunciation focus is adjusted to your goals", "Payment instructions for PayPal or PayPay are shared by email after review"]
       },
       "zh-Hant": {
         eyebrow: "英語發音教練",
         title: "更容易傳達的英語，從發音開始整理。",
         summary: "為日語母語者設計，聚焦口型、舌位、氣息、節奏與清晰度的線上發音教練。",
         outcomes: ["整理日語母語者常卡住的音", "面試、會議、簡報朗讀練習", "錄音回饋", "降低開口負擔的發音設計"],
-        method: ["預約採申請制", "教師確認目標與練習範圍後核准", "付款功能將於服務商設定後啟用"]
+        method: ["可選擇線上或面對面課程", "依照目標調整發音練習重點", "確認購買申請後，將以電子郵件提供 PayPal 或 PayPay 付款資訊"]
       }
     },
     packageOptions: [
-      { id: "en-trial", name: "Pronunciation Check", lessons: 1, minutes: 25, priceLabel: "External platform or invoice placeholder", status: "draft" },
-      { id: "en-4", name: "4 Coaching Sessions", lessons: 4, minutes: 50, priceLabel: "Invoice placeholder", status: "ready_for_invoice" },
-      { id: "en-8", name: "8 Coaching Sessions", lessons: 8, minutes: 50, priceLabel: "Invoice placeholder", status: "ready_for_invoice" }
+      { id: "en-trial", name: "Pronunciation Check", lessons: 1, minutes: 25, priceLabel: "Payment details by email", status: "draft" },
+      { id: "en-4", name: "4 Coaching Sessions", lessons: 4, minutes: 50, priceLabel: "Payment details by email", status: "ready_for_invoice" },
+      { id: "en-8", name: "8 Coaching Sessions", lessons: 8, minutes: 50, priceLabel: "Payment details by email", status: "ready_for_invoice" }
     ]
   }
 ];
@@ -473,7 +473,7 @@ export const demoCustomer: CustomerRecord = {
   },
   timeline: [
     { at: "2026-07-18", title: "Trial completed", detail: "Needs business Japanese for internal presentations.", source: "Manual intake" },
-    { at: "2026-07-20", title: "Package started", detail: "4 lesson package, invoice placeholder marked paid manually.", source: "Owner dashboard" },
+    { at: "2026-07-20", title: "Package started", detail: "4 lesson package. Payment guidance was handled manually.", source: "Owner dashboard" },
     { at: "2026-07-25", title: "Booking request", detail: "Requested next Japanese conversation lesson.", source: "Student dashboard" }
   ]
 };

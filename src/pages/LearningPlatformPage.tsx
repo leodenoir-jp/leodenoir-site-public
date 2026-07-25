@@ -15,8 +15,7 @@ import {
   englishPronunciationMenus,
   japaneseLessonMenus,
   languageLabels,
-  lessonProducts,
-  platformUi
+  lessonProducts
 } from "../data/platform";
 
 type LearningPlatformPageProps = {
@@ -120,72 +119,8 @@ async function sendPlatformNotification({ name, email, inquiryType, message }: P
   }
 }
 
-const initialAvailabilitySlots: TutorAvailabilitySlot[] = [
-  {
-    id: "AV-1001",
-    start: "2026-07-29T19:00",
-    end: "2026-07-29T20:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "日本語レッスン / 英語発音コーチングどちらも相談可"
-  },
-  {
-    id: "AV-1004",
-    start: "2026-07-30T09:00",
-    end: "2026-07-30T10:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "朝のオンライン枠"
-  },
-  {
-    id: "AV-1005",
-    start: "2026-07-30T20:30",
-    end: "2026-07-30T21:30",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "夜のオンライン枠"
-  },
-  {
-    id: "AV-1002",
-    start: "2026-07-31T10:00",
-    end: "2026-07-31T11:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "オンライン枠"
-  },
-  {
-    id: "AV-1006",
-    start: "2026-08-01T18:00",
-    end: "2026-08-01T19:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "定期予約サンプル枠"
-  },
-  {
-    id: "AV-1003",
-    start: "2026-08-02T14:00",
-    end: "2026-08-02T15:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "inPerson",
-    note: "対面相談候補枠。初回は問い合わせ必須"
-  },
-  {
-    id: "AV-1007",
-    start: "2026-08-05T19:00",
-    end: "2026-08-05T20:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "水曜夜の定期予約候補"
-  },
-  {
-    id: "AV-1008",
-    start: "2026-08-12T19:00",
-    end: "2026-08-12T20:00",
-    timezone: "Asia/Tokyo",
-    deliveryMode: "online",
-    note: "水曜夜の定期予約候補"
-  }
-];
+const initialAvailabilitySlots: TutorAvailabilitySlot[] = [];
+const sampleAvailabilitySlotIds = new Set(["AV-1001", "AV-1002", "AV-1003", "AV-1004", "AV-1005", "AV-1006", "AV-1007", "AV-1008"]);
 
 const initialBookingForm: BookingFormState = {
   name: "",
@@ -218,7 +153,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     if (!saved) return initialAvailabilitySlots;
     try {
       const parsed = JSON.parse(saved) as TutorAvailabilitySlot[];
-      return Array.isArray(parsed) ? parsed : initialAvailabilitySlots;
+      return Array.isArray(parsed) ? parsed.filter((slot) => !sampleAvailabilitySlotIds.has(slot.id)) : initialAvailabilitySlots;
     } catch {
       return initialAvailabilitySlots;
     }
@@ -230,7 +165,6 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   });
 
   const mode = getMode(route.path);
-  const ui = platformUi[language];
   const selectedProduct = lessonProducts.find((product) => route.path.endsWith(product.kind)) ?? lessonProducts[0];
 
   const handleLanguageChange = (nextLanguage: PlatformLanguage) => {
@@ -245,6 +179,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   const submitBooking = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const studentCopy = getStudentPageCopy(language);
     const emailForRequest = (bookingForm.email || studentEmail).trim().toLowerCase();
     const nameForRequest = bookingForm.name.trim();
     const lessonKind = getBookingLessonKind(bookingForm);
@@ -254,12 +189,12 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     const requestedSlots = bookingForm.requestedSlots.filter((slot) => !isAvailabilitySlotBooked(slot, bookings));
 
     if (blockedStudents.includes(emailForRequest)) {
-      setBookingMessage("このメールアドレスからの予約リクエストは受付できません。");
+      setBookingMessage(studentCopy.blockedMessage);
       return;
     }
 
     if (!nameForRequest || !emailForRequest || !emailIsValid || requestedSlots.length === 0 || !menu) {
-      setBookingMessage("必須項目とメール形式を確認してください。予約はまだ送信されていません。");
+      setBookingMessage(studentCopy.validationError);
       return;
     }
 
@@ -311,8 +246,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     setChangeRequest((current) => ({ ...current, bookingId: nextBookings[0].id }));
     setBookingMessage(
       notificationSent
-        ? `${nextBookings.length}件の予約リクエストを作成し、運営者へメール通知しました。講師承認後に予約確定となります。`
-        : `${nextBookings.length}件の予約リクエストを作成しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`
+        ? studentCopy.bookingSuccess(nextBookings.length)
+        : studentCopy.bookingMailError(nextBookings.length)
     );
   };
 
@@ -334,14 +269,16 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   const submitChangeRequest = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const studentCopy = getStudentPageCopy(language);
 
     if (!changeRequest.bookingId || !changeRequest.reason.trim()) {
-      setBookingMessage("日程変更リクエストには理由の入力が必要です。");
+      setBookingMessage(studentCopy.changeValidationError);
       return;
     }
 
     const booking = bookings.find((item) => item.id === changeRequest.bookingId);
     const requestLabel = changeRequest.type === "cancel_requested" ? "キャンセル" : "日程変更";
+    const displayRequestLabel = changeRequest.type === "cancel_requested" ? studentCopy.cancel : studentCopy.reschedule;
     const notificationSent = await sendPlatformNotification({
       name: booking?.student ?? "Student",
       email: booking?.studentEmail ?? studentEmail,
@@ -363,8 +300,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     updateBookingStatus(changeRequest.bookingId, changeRequest.type, changeRequest.reason.trim());
     setBookingMessage(
       notificationSent
-        ? `${requestLabel}リクエストを記録し、運営者へメール通知しました。講師の承認があるまで予定は変更されません。`
-        : `${requestLabel}リクエストを記録しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`
+        ? studentCopy.changeSuccess(displayRequestLabel)
+        : studentCopy.changeMailError(displayRequestLabel)
     );
     setChangeRequest((current) => ({ ...current, reason: "" }));
   };
@@ -407,6 +344,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               setStudentEmail={setStudentEmail}
               availabilitySlots={availabilitySlots}
               setAvailabilitySlots={setAvailabilitySlots}
+              reviews={reviews}
+              setReviews={setReviews}
             />
           ) : mode === "lesson" ? (
             <LessonLanding
@@ -419,7 +358,6 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
             />
           ) : (
             <StudentDashboard
-              ui={ui}
               language={language}
               bookings={bookings}
               customer={customer}
@@ -445,10 +383,10 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
 function PlatformNav({ route, activePath }: { route: Route; activePath: string }) {
   const links = [
-    { href: "/learning", label: "summary" },
+    { href: "/learning", label: "Summary" },
     { href: "/learning/japanese", label: "Japanese" },
     { href: "/learning/english", label: "English Pronunciation" },
-    { href: "/platform", label: "Student" },
+    { href: "/platform", label: "Student Page" },
     { href: "/learning/reviews", label: "Lesson Review" }
   ];
 
@@ -476,10 +414,10 @@ function LearningHome({ route, language }: { route: Route; language: PlatformLan
     <div className="platform-stack">
       <div className="platform-band">
         <div>
-          <h2>学習メニューと予約リクエスト</h2>
-          <p>オンラインと対面の入口を分け、レッスンメニュー・料金・予約リクエストを確認できます。予約は即時確定ではなく、講師承認後に確定します。</p>
+          <h2>学習メニュー</h2>
+          <p>1on1日本語レッスンと英語発音コーチングの内容・料金・受講方法を確認できます。目的や現在地に合わせて、必要なメニューをお選びください。</p>
         </div>
-        <p className="platform-badge">予約リクエスト / 講師承認制</p>
+        <p className="platform-badge">Online / In-person</p>
       </div>
       <div className="platform-grid two">
         {lessonProducts.map((product) => {
@@ -569,8 +507,8 @@ function LessonLanding({
         <aside className="platform-card">
           <LessonRules language={language} lessonKind={product.kind} />
           <div className="video-placeholder" aria-label={product.demoVideoLabel}>
-            <span>Demo Video</span>
-            <strong>Embed placeholder</strong>
+            <span>Video</span>
+            <strong>準備中</strong>
           </div>
           <p className="platform-note">{product.timezoneLabel}</p>
           <button className="button secondary" type="button" onClick={() => route.navigate("/platform")}>
@@ -833,9 +771,9 @@ function PurchaseDialog({
     const notificationSent = await sendPlatformNotification({
       name: receiptName || "Lesson purchase draft",
       email: receiptEmail,
-      inquiryType: "Learning購入内容確認",
+      inquiryType: "Learning購入希望内容確認",
       message: [
-        "Learningページから購入内容確認が送信されました。",
+        "Learningページから購入希望内容が送信されました。",
         "",
         `コース: ${selectedMenuText.category}：${selectedMenuText.name}`,
         `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
@@ -851,8 +789,8 @@ function PurchaseDialog({
 
     setPurchaseMessage(
       notificationSent
-        ? "購入内容確認を保存し、運営者へメール通知しました。実決済は決済サービス接続後に有効化します。"
-        : "購入内容確認を保存しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。"
+        ? "購入希望を送信しました。内容確認後、支払い方法に応じてPayPalまたはPayPayのご案内をメールでお送りします。"
+        : "購入希望内容を保存しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。"
     );
   };
 
@@ -862,7 +800,7 @@ function PurchaseDialog({
         <button className="modal-close" type="button" onClick={onClose} aria-label="購入画面を閉じる">
           ×
         </button>
-        <h3 id="purchase-dialog-title">購入内容確認</h3>
+        <h3 id="purchase-dialog-title">購入希望内容確認</h3>
         {purchaseMessage ? <p className={isBlocked ? "form-error" : "form-success"}>{purchaseMessage}</p> : null}
         <div className="purchase-summary">
           <p><strong>{text.course}</strong><span>{selectedMenuText.category}：{selectedMenuText.name}</span></p>
@@ -938,13 +876,13 @@ function PurchaseDialog({
           </dl>
           <p>{receiptCopy.note}</p>
         </section>
-        <p className="platform-note">この画面は購入内容確認用の仮画面です。実際の決済・領収書発行は、決済サービス接続後に有効化します。</p>
+        <p className="platform-note">この画面では購入希望内容を送信します。決済はこの場では完了しません。内容確認後、PayPalまたはPayPayの支払い案内をメールでお送りします。</p>
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>
             閉じる
           </button>
           <button className="button primary" type="button" onClick={savePurchaseDraft} disabled={isBlocked}>
-            確認内容を保存
+            購入希望を送信
           </button>
         </div>
       </div>
@@ -953,7 +891,6 @@ function PurchaseDialog({
 }
 
 function BookingRequestCard({
-  ui,
   language,
   studentEmail,
   blockedStudents,
@@ -962,7 +899,6 @@ function BookingRequestCard({
   submitBooking,
   bookingMessage
 }: {
-  ui: (typeof platformUi)[PlatformLanguage];
   language: PlatformLanguage;
   studentEmail: string;
   blockedStudents: string[];
@@ -977,27 +913,28 @@ function BookingRequestCard({
   const currentEmail = (bookingForm.email || studentEmail).trim().toLowerCase();
   const isBlocked = blockedStudents.includes(currentEmail);
   const selectedSlots = bookingForm.requestedSlots;
-  const selectedDeliveryLabel = summarizeDeliveryModes(selectedSlots);
+  const text = getStudentPageCopy(language);
+  const selectedDeliveryLabel = summarizeDeliveryModes(selectedSlots, language);
 
   return (
     <form className="platform-card platform-form" id="booking-request" onSubmit={submitBooking}>
-      <h3>{ui.requestLesson}</h3>
-      <p className="platform-muted">このフォームはStudentログイン後のみ表示されます。送信後、講師承認をもって予約確定となります。</p>
-      {isBlocked ? <p className="form-error">このメールアドレスからの予約リクエストは受付できません。</p> : null}
+      <h3>{text.bookingRequestTitle}</h3>
+      <p className="platform-muted">{text.bookingRequestLead}</p>
+      {isBlocked ? <p className="form-error">{text.blockedMessage}</p> : null}
       {bookingMessage ? <p className="form-success">{bookingMessage}</p> : null}
       <div className="platform-grid two">
         <label>
-          お名前
+          {text.name}
           <input value={bookingForm.name} onChange={(event) => setBookingForm({ ...bookingForm, name: event.target.value })} required />
         </label>
         <label>
-          ログインメール
+          {text.loginEmail}
           <input type="email" value={bookingForm.email || studentEmail} onChange={(event) => setBookingForm({ ...bookingForm, email: event.target.value })} required />
         </label>
       </div>
       <div className="platform-grid two">
         <label>
-          レッスン種別
+          {text.lessonKind}
           <select
             value={lessonKind}
             onChange={(event) => {
@@ -1011,12 +948,12 @@ function BookingRequestCard({
               });
             }}
           >
-            <option value="japanese">1on1日本語レッスン</option>
-            <option value="english">英語発音コーチング</option>
+            <option value="japanese">{text.japaneseLesson}</option>
+            <option value="english">{text.englishLesson}</option>
           </select>
         </label>
         <label>
-          レッスンメニュー
+          {text.lessonMenu}
           <select
             value={selectedMenu.id}
             onChange={(event) => {
@@ -1037,23 +974,23 @@ function BookingRequestCard({
           </select>
         </label>
       </div>
-      <p className="platform-note">実施方法は、選択した講師空き枠に合わせて自動反映されます。対面枠は開催地の事前確認が必要です。</p>
+      <p className="platform-note">{text.deliveryNote}</p>
       <div className="platform-grid two">
         <label>
-          選択中の候補枠
-          <input value={selectedSlots.length > 0 ? `${selectedSlots.length}枠を選択中` : "講師空き時間カレンダーから候補枠を選択してください。"} readOnly />
+          {text.selectedSlots}
+          <input value={selectedSlots.length > 0 ? text.selectedSlotCount(selectedSlots.length) : text.selectedSlotPlaceholder} readOnly />
         </label>
         <label>
-          実施方法
+          {text.deliveryMode}
           <input value={selectedDeliveryLabel} readOnly />
         </label>
       </div>
       <div className="selected-slot-list">
         {selectedSlots.length > 0 ? selectedSlots.map((slot) => (
           <span key={slot.id}>
-            {formatAvailabilityRange(slot)} / {slot.deliveryMode === "online" ? "オンライン" : "対面"}
+            {formatAvailabilityRange(slot)} / {formatDeliveryMode(slot.deliveryMode, language)}
           </span>
-        )) : <span>日時は講師空き時間カレンダーから選択してください。手入力による予約リクエストは受け付けていません。</span>}
+        )) : <span>{text.noManualSlot}</span>}
       </div>
       <label className="checkbox-line">
         <input
@@ -1061,15 +998,15 @@ function BookingRequestCard({
           checked={bookingForm.recurringRequest}
           onChange={(event) => setBookingForm({ ...bookingForm, recurringRequest: event.target.checked })}
         />
-        定期予約としてリクエストする
+        {text.recurringRequest}
       </label>
-      <p className="platform-note">複数枠を選択した場合は、定期予約候補としてまとめて講師へリクエストされます。</p>
+      <p className="platform-note">{text.recurringNote}</p>
       <label>
-        目的・相談内容（任意）
+        {text.purpose}
         <textarea value={bookingForm.purpose} rows={5} onChange={(event) => setBookingForm({ ...bookingForm, purpose: event.target.value })} />
       </label>
       <button className="button primary" type="submit" disabled={isBlocked || selectedSlots.length === 0}>
-        {ui.requestLesson}
+        {text.bookingRequestTitle}
       </button>
     </form>
   );
@@ -1103,7 +1040,7 @@ function OwnerBlockControls({
     <section className="platform-card platform-form owner-control">
       <p className="eyebrow">Owner Safety Control</p>
       <h3>ブロックリスト管理</h3>
-      <p className="platform-muted">ブロックリストに追加されたメールアドレスからの予約リクエストおよび購入確認は、自動的に拒否されます。V1ではローカル状態での確認用です。</p>
+      <p className="platform-muted">ブロックリストに追加されたメールアドレスからの予約リクエストおよび購入希望は、自動的に受付対象外となります。</p>
       <div className="platform-grid two">
         <label>
           ブロックする生徒のメールアドレス
@@ -1140,9 +1077,7 @@ function LessonReviewPage({
   const [reviewEmail, setReviewEmail] = useState(studentEmail);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5>(5);
   const [comment, setComment] = useState("");
-  const isOwner = studentEmail.toLowerCase() === ownerEmail;
   const approvedReviews = reviews.filter((review) => review.status === "approved");
-  const pendingReviews = reviews.filter((review) => review.status === "pending");
   const text = getReviewCopy(language);
 
   const submitReview = (event: FormEvent<HTMLFormElement>) => {
@@ -1161,10 +1096,6 @@ function LessonReviewPage({
     setComment("");
   };
 
-  const approveReview = (reviewId: string) => {
-    setReviews(reviews.map((review) => review.id === reviewId ? { ...review, status: "approved" } : review));
-  };
-
   return (
     <div className="platform-stack">
       <div className="platform-band">
@@ -1173,13 +1104,13 @@ function LessonReviewPage({
           <h2>{text.title}</h2>
           <p>{text.summary}</p>
         </div>
-        <p className="platform-badge">Approved reviews only</p>
+        <p className="platform-badge">{text.badge}</p>
       </div>
 
       <form className="platform-card platform-form review-form-compact" onSubmit={submitReview}>
         <div>
           <h3>{text.formTitle}</h3>
-          <p className="platform-muted">{text.approvalRule}</p>
+          <p className="platform-muted">{text.formLead}</p>
         </div>
         <div className="platform-grid two">
           <label>
@@ -1220,21 +1151,6 @@ function LessonReviewPage({
         </div>
       </section>
 
-      {isOwner ? (
-        <section className="platform-card">
-          <h3>承認待ちレビュー</h3>
-          <div className="review-grid">
-            {pendingReviews.length > 0 ? pendingReviews.map((review) => (
-              <div className="review-card-pending" key={review.id}>
-                <ReviewCard review={review} />
-                <button className="button primary" type="button" onClick={() => approveReview(review.id)}>
-                  掲載を承認
-                </button>
-              </div>
-            )) : <p className="platform-muted">承認待ちレビューはありません。</p>}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
@@ -1258,12 +1174,16 @@ function TutorAvailabilityPage({
   studentEmail,
   setStudentEmail,
   availabilitySlots,
-  setAvailabilitySlots
+  setAvailabilitySlots,
+  reviews,
+  setReviews
 }: {
   studentEmail: string;
   setStudentEmail: (email: string) => void;
   availabilitySlots: TutorAvailabilitySlot[];
   setAvailabilitySlots: (slots: TutorAvailabilitySlot[]) => void;
+  reviews: LessonReview[];
+  setReviews: (reviews: LessonReview[]) => void;
 }) {
   const [loginEmail, setLoginEmail] = useState(studentEmail);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
@@ -1295,6 +1215,7 @@ function TutorAvailabilityPage({
     weekdays: [1, 3, 5]
   });
   const isOwner = studentEmail.toLowerCase() === ownerEmail;
+  const pendingReviews = reviews.filter((review) => review.status === "pending");
 
   const handleLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1356,13 +1277,10 @@ function TutorAvailabilityPage({
     setAvailabilitySlots([...availabilitySlots, ...nextSlots].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
   };
 
-  const addSampleAvailabilitySlots = () => {
-    const existingIds = new Set(availabilitySlots.map((slot) => slot.id));
-    const nextSlots = [
-      ...availabilitySlots,
-      ...initialAvailabilitySlots.filter((slot) => !existingIds.has(slot.id))
-    ].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-    setAvailabilitySlots(nextSlots);
+  const publishReview = (reviewId: string) => {
+    setReviews(reviews.map((review) => (
+      review.id === reviewId ? { ...review, status: "approved" } : review
+    )));
   };
 
   if (!isOwner) {
@@ -1370,7 +1288,7 @@ function TutorAvailabilityPage({
       <form className="platform-card platform-form login-card" onSubmit={handleLogin}>
         <p className="eyebrow">Tutor only</p>
         <h2>講師専用 空き時間設定</h2>
-        <p>講師の空き枠を設定するための専用画面です。V1では運営者メールで疑似ログインします。</p>
+        <p>講師の空き枠を設定するための専用画面です。運営者メールアドレスで確認できます。</p>
         <label>
           講師メールアドレス
           <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={ownerEmail} required />
@@ -1378,7 +1296,7 @@ function TutorAvailabilityPage({
         <button className="button primary" type="submit">
           講師画面を開く
         </button>
-        <p className="platform-note">本番運用では、ここに認証機能と権限管理を接続してください。</p>
+        <p className="platform-note">講師本人のみが使用する管理画面です。</p>
       </form>
     );
   }
@@ -1393,9 +1311,6 @@ function TutorAvailabilityPage({
         </div>
         <div className="student-session">
           <p className="platform-badge">{studentEmail}</p>
-          <button className="button secondary" type="button" onClick={addSampleAvailabilitySlots}>
-            サンプル枠を登録
-          </button>
         </div>
       </div>
 
@@ -1514,12 +1429,26 @@ function TutorAvailabilityPage({
           onSelectSlot={(slot) => removeAvailabilitySlot(slot.id)}
         />
       </section>
+
+      <section className="platform-card">
+        <h3>レビュー管理</h3>
+        <p className="platform-muted">投稿されたレビューを確認し、掲載するものを選択できます。</p>
+        <div className="review-grid">
+          {pendingReviews.length > 0 ? pendingReviews.map((review) => (
+            <div className="review-card-pending" key={review.id}>
+              <ReviewCard review={review} />
+              <button className="button primary" type="button" onClick={() => publishReview(review.id)}>
+                掲載する
+              </button>
+            </div>
+          )) : <p className="platform-muted">確認待ちのレビューはありません。</p>}
+        </div>
+      </section>
     </div>
   );
 }
 
 function StudentDashboard({
-  ui,
   language,
   bookings,
   customer,
@@ -1536,7 +1465,6 @@ function StudentDashboard({
   submitChangeRequest,
   bookingMessage
 }: {
-  ui: (typeof platformUi)[PlatformLanguage];
   language: PlatformLanguage;
   bookings: BookingRecord[];
   customer: CustomerRecord;
@@ -1558,6 +1486,7 @@ function StudentDashboard({
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
+  const text = getStudentPageCopy(language);
   const normalizedEmail = studentEmail.toLowerCase();
   const isOwner = normalizedEmail === ownerEmail;
   const visibleBookings = bookings.filter((booking) => booking.studentEmail.toLowerCase() === normalizedEmail);
@@ -1614,16 +1543,15 @@ function StudentDashboard({
       <div className="platform-stack">
         <form className="platform-card platform-form login-card" onSubmit={handleLogin}>
           <p className="eyebrow">Student</p>
-          <h2>受講者ダッシュボード</h2>
-          <p>登録メールアドレスを入力すると、そのメールアドレスに紐づく予約状況を確認できます。</p>
+          <h2>{text.loginTitle}</h2>
+          <p>{text.loginLead}</p>
           <label>
-            登録メールアドレス
+            {text.registeredEmail}
             <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="mika@example.com" required />
           </label>
           <button className="button primary" type="submit">
-            確認する
+            {text.loginButton}
           </button>
-          <p className="platform-note">V1の疑似ログインです。IPアドレスは本人確認として信頼できないため、ここでは使用しません。実運用には認証機能が必要です。</p>
         </form>
       </div>
     );
@@ -1634,8 +1562,8 @@ function StudentDashboard({
       <div className="platform-band">
         <div>
           <p className="eyebrow">Student Dashboard</p>
-          <h2>予約状況、パッケージ、学習履歴</h2>
-          <p>予約確定と予約リクエストを明確に分けます。生徒側から直接キャンセルはできず、日程変更も講師承認後に反映されます。</p>
+          <h2>{text.dashboardTitle}</h2>
+          <p>{text.dashboardLead}</p>
         </div>
         <div className="student-session">
           <p className="platform-badge">{activeCustomer.email}</p>
@@ -1643,19 +1571,18 @@ function StudentDashboard({
             setStudentEmail("");
             window.localStorage.removeItem(studentEmailKey);
           }}>
-            切り替え
+            {text.switchButton}
           </button>
         </div>
       </div>
 
       <div className="platform-grid three">
-        <KpiCard label="Package remaining" value={`${activeCustomer.packageRemaining} lessons`} />
-        <KpiCard label="Renewal due" value={activeCustomer.renewalDue} />
-        <KpiCard label="Customer status" value={activeCustomer.status} />
+        <KpiCard label={text.remainingLessons} value={text.lessonCount(activeCustomer.packageRemaining)} />
+        <KpiCard label={text.nextCheck} value={activeCustomer.renewalDue} />
+        <KpiCard label={text.customerStatus} value={formatCustomerStatus(activeCustomer.status, language)} />
       </div>
 
       <BookingRequestCard
-        ui={ui}
         language={language}
         studentEmail={studentEmail}
         blockedStudents={blockedStudents}
@@ -1666,14 +1593,15 @@ function StudentDashboard({
       />
 
       <section className="platform-card">
-        <h3>講師空き時間カレンダー</h3>
-        <p className="platform-muted">講師が公開した候補枠のうち、まだ予約が入っていない枠だけを表示しています。枠をクリックすると、予約リクエストの希望日時に反映されます。</p>
+        <h3>{text.availabilityTitle}</h3>
+        <p className="platform-muted">{text.availabilityLead}</p>
         <AvailabilityCalendar
           month={availabilityMonth}
           setMonth={setAvailabilityMonth}
           slots={openAvailabilitySlots}
           selectedSlotIds={bookingForm.requestedSlots.map((slot) => slot.id)}
           onSelectSlot={toggleAvailabilitySlot}
+          language={language}
         />
       </section>
 
@@ -1688,28 +1616,29 @@ function StudentDashboard({
 
       <div className="platform-grid two">
         <section className="platform-card">
-          <h3>Booking calendar</h3>
+          <h3>{text.bookingCalendarTitle}</h3>
           <BookingCalendar
             month={calendarMonth}
             setMonth={setCalendarMonth}
             bookings={visibleBookings}
             onSelectBooking={setSelectedBooking}
+            language={language}
           />
         </section>
 
         <form className="platform-card platform-form" onSubmit={submitChangeRequest}>
-          <h3>日程変更・キャンセルリクエスト</h3>
-          <p className="platform-muted">生徒側からレッスン予定を直接キャンセルすることはできません。日程変更も、講師の承認があるまで確定しません。</p>
+          <h3>{text.changeTitle}</h3>
+          <p className="platform-muted">{text.changeLead}</p>
           {bookingMessage ? <p className="form-success">{bookingMessage}</p> : null}
           <label>
-            リクエスト種別
+            {text.requestType}
             <select value={changeRequest.type} onChange={(event) => setChangeRequest({ ...changeRequest, type: event.target.value as RequestChange["type"] })}>
-              <option value="reschedule_requested">日程変更</option>
-              <option value="cancel_requested">キャンセル</option>
+              <option value="reschedule_requested">{text.reschedule}</option>
+              <option value="cancel_requested">{text.cancel}</option>
             </select>
           </label>
           <label>
-            対象予約
+            {text.targetBooking}
             <select value={changeRequest.bookingId} onChange={(event) => setChangeRequest({ ...changeRequest, bookingId: event.target.value })}>
               {visibleBookings.map((booking) => (
                 <option key={booking.id} value={booking.id}>
@@ -1719,27 +1648,27 @@ function StudentDashboard({
             </select>
           </label>
           <label>
-            理由（必須）
+            {text.reasonRequired}
             <textarea value={changeRequest.reason} rows={5} onChange={(event) => setChangeRequest({ ...changeRequest, reason: event.target.value })} required />
           </label>
           <button className="button primary" type="submit" disabled={visibleBookings.length === 0}>
-            リクエストを記録
+            {text.changeSubmit}
           </button>
         </form>
       </div>
 
       <section className="platform-card">
-        <h3>Booking timeline</h3>
+        <h3>{text.bookingTimelineTitle}</h3>
         <div className="record-list">
           {visibleBookings.length > 0 ? visibleBookings.map((booking) => (
             <article key={booking.id}>
-              <strong>{booking.id} / {booking.lessonKind}</strong>
+              <strong>{booking.id} / {formatLessonKind(booking.lessonKind, language)}</strong>
               <span>{formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
-              <p>Status: <StatusBadge status={booking.status} /> / Approval: {booking.approvalGate}</p>
-              {booking.reason ? <p>Reason: {booking.reason}</p> : null}
-              <p>12-hour policy: {isInsideTwelveHours(booking.requestedSlot) ? "Exception review required" : "Standard change window"}</p>
+              <p>{text.statusLabel}: <StatusBadge status={booking.status} language={language} /></p>
+              {booking.reason ? <p>{text.detailLabel}: {booking.reason}</p> : null}
+              <p>{text.twelveHourLabel}: {isInsideTwelveHours(booking.requestedSlot) ? text.twelveHourClose : text.twelveHourOpen}</p>
             </article>
-          )) : <p className="platform-muted">このメールアドレスに紐づくデモ予約はまだありません。</p>}
+          )) : <p className="platform-muted">{text.noConfirmedBookings}</p>}
         </div>
       </section>
 
@@ -1750,9 +1679,9 @@ function StudentDashboard({
             <p className="eyebrow">Lesson Notes</p>
             <h3>{selectedBooking.id} / {formatDateTime(selectedBooking.requestedSlot)}</h3>
             {isPastBooking(selectedBooking.requestedSlot) ? (
-              <p>{selectedBooking.reason ?? "この予約のレッスンメモはまだ登録されていません。"}</p>
+              <p>{selectedBooking.reason ?? text.noLessonNote}</p>
             ) : (
-              <p>未来の予約です。レッスン終了後にノートを表示します。</p>
+              <p>{text.futureLessonNote}</p>
             )}
           </div>
         </div>
@@ -1765,12 +1694,14 @@ function BookingCalendar({
   month,
   setMonth,
   bookings,
-  onSelectBooking
+  onSelectBooking,
+  language = "ja"
 }: {
   month: Date;
   setMonth: (month: Date) => void;
   bookings: BookingRecord[];
   onSelectBooking: (booking: BookingRecord) => void;
+  language?: PlatformLanguage;
 }) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -1788,12 +1719,12 @@ function BookingCalendar({
   return (
     <div className="booking-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label="前月">‹</button>
-        <strong>{year}年 {monthIndex + 1}月</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label="翌月">›</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>‹</button>
+        <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>›</button>
       </div>
       <div className="calendar-weekdays">
-        {["日", "月", "火", "水", "木", "金", "土"].map((day) => <span key={day}>{day}</span>)}
+        {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
       </div>
       <div className="calendar-grid">
         {cells.map((date, index) => {
@@ -1820,13 +1751,15 @@ function AvailabilityCalendar({
   setMonth,
   slots,
   selectedSlotIds = [],
-  onSelectSlot
+  onSelectSlot,
+  language = "ja"
 }: {
   month: Date;
   setMonth: (month: Date) => void;
   slots: TutorAvailabilitySlot[];
   selectedSlotIds?: string[];
   onSelectSlot?: (slot: TutorAvailabilitySlot) => void;
+  language?: PlatformLanguage;
 }) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -1844,12 +1777,12 @@ function AvailabilityCalendar({
   return (
     <div className="booking-calendar availability-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label="前月">‹</button>
-        <strong>{year}年 {monthIndex + 1}月</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label="翌月">›</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>‹</button>
+        <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>›</button>
       </div>
       <div className="calendar-weekdays">
-        {["日", "月", "火", "水", "木", "金", "土"].map((day) => <span key={day}>{day}</span>)}
+        {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
       </div>
       <div className="calendar-grid">
         {cells.map((date, index) => {
@@ -1870,7 +1803,7 @@ function AvailabilityCalendar({
                     title={slot.note}
                     aria-pressed={onSelectSlot ? selected : undefined}
                   >
-                    {formatTime(slot.start)}-{formatTime(slot.end)} {slot.deliveryMode === "online" ? "Online" : "In person"}
+                    {formatTime(slot.start)}-{formatTime(slot.end)} {formatDeliveryMode(slot.deliveryMode, language)}
                   </button>
                 );
               })}
@@ -1891,8 +1824,300 @@ function KpiCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function StatusBadge({ status }: { status: BookingStatus }) {
-  return <span className={`status-badge ${status}`}>{status.replace(/_/g, " ")}</span>;
+function formatCustomerStatus(status: CustomerRecord["status"], language: PlatformLanguage) {
+  const labels: Record<PlatformLanguage, Record<CustomerRecord["status"], string>> = {
+    ja: {
+      active: "受講中",
+      watch: "確認中",
+      restricted: "一部制限中",
+      blocked: "受付停止"
+    },
+    en: {
+      active: "Active",
+      watch: "Under review",
+      restricted: "Restricted",
+      blocked: "Not available"
+    },
+    "zh-Hant": {
+      active: "上課中",
+      watch: "確認中",
+      restricted: "部分限制",
+      blocked: "暫停受理"
+    }
+  };
+  return labels[language][status] ?? status;
+}
+
+function formatBookingStatus(status: BookingStatus, language: PlatformLanguage) {
+  const labels: Record<PlatformLanguage, Record<BookingStatus, string>> = {
+    ja: {
+      requested: "リクエスト送信済み",
+      approved: "予約確定",
+      reschedule_requested: "日程変更リクエスト中",
+      cancel_requested: "キャンセルリクエスト中",
+      cancelled: "キャンセル済み"
+    },
+    en: {
+      requested: "Request sent",
+      approved: "Confirmed",
+      reschedule_requested: "Reschedule requested",
+      cancel_requested: "Cancellation requested",
+      cancelled: "Cancelled"
+    },
+    "zh-Hant": {
+      requested: "已送出申請",
+      approved: "預約已確認",
+      reschedule_requested: "已提出改期申請",
+      cancel_requested: "已提出取消申請",
+      cancelled: "已取消"
+    }
+  };
+  return labels[language][status] ?? status;
+}
+
+function StatusBadge({ status, language = "ja" }: { status: BookingStatus; language?: PlatformLanguage }) {
+  return <span className={`status-badge ${status}`}>{formatBookingStatus(status, language)}</span>;
+}
+
+function formatLessonKind(kind: LessonKind, language: PlatformLanguage) {
+  const labels: Record<PlatformLanguage, Record<LessonKind, string>> = {
+    ja: {
+      japanese: "1on1日本語レッスン",
+      english: "英語発音コーチング"
+    },
+    en: {
+      japanese: "1-on-1 Japanese Lesson",
+      english: "English Pronunciation Coaching"
+    },
+    "zh-Hant": {
+      japanese: "1對1日語課程",
+      english: "英語發音教練課"
+    }
+  };
+  return labels[language][kind];
+}
+
+function formatDeliveryMode(mode: DeliveryMode, language: PlatformLanguage) {
+  const labels: Record<PlatformLanguage, Record<DeliveryMode, string>> = {
+    ja: {
+      online: "オンライン",
+      inPerson: "対面"
+    },
+    en: {
+      online: "Online",
+      inPerson: "In person"
+    },
+    "zh-Hant": {
+      online: "線上",
+      inPerson: "實體"
+    }
+  };
+  return labels[language][mode];
+}
+
+function formatCalendarMonth(year: number, monthIndex: number, language: PlatformLanguage) {
+  if (language === "en") return `${new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(year, monthIndex, 1))} ${year}`;
+  if (language === "zh-Hant") return `${year}年${monthIndex + 1}月`;
+  return `${year}年 ${monthIndex + 1}月`;
+}
+
+function getWeekdayNames(language: PlatformLanguage) {
+  const labels: Record<PlatformLanguage, string[]> = {
+    ja: ["日", "月", "火", "水", "木", "金", "土"],
+    en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "zh-Hant": ["日", "一", "二", "三", "四", "五", "六"]
+  };
+  return labels[language];
+}
+
+function getStudentPageCopy(language: PlatformLanguage) {
+  const copies = {
+    ja: {
+      loginTitle: "受講者ダッシュボード",
+      loginLead: "登録メールアドレスを入力すると、そのメールアドレスに紐づく予約状況を確認できます。",
+      registeredEmail: "登録メールアドレス",
+      loginButton: "確認する",
+      dashboardTitle: "予約状況、パッケージ、学習履歴",
+      dashboardLead: "予約希望、確定済みの予約、パッケージ状況を確認できます。日程については内容確認後にメールでご案内します。",
+      switchButton: "切り替え",
+      remainingLessons: "残レッスン",
+      nextCheck: "次回確認目安",
+      customerStatus: "受講状況",
+      lessonCount: (count: number) => `${count}回`,
+      bookingRequestTitle: "予約リクエストを送る",
+      bookingRequestLead: "希望日時と受講内容を送信してください。内容を確認のうえ、日程についてメールでご案内します。",
+      blockedMessage: "このメールアドレスからの予約リクエストは受付できません。",
+      validationError: "必須項目とメール形式を確認してください。予約はまだ送信されていません。",
+      bookingSuccess: (count: number) => `${count}件の予約希望を送信しました。内容確認後、日程についてメールでご案内します。`,
+      bookingMailError: (count: number) => `${count}件の予約リクエストを作成しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`,
+      name: "お名前",
+      loginEmail: "ログインメール",
+      lessonKind: "レッスン種別",
+      japaneseLesson: "1on1日本語レッスン",
+      englishLesson: "英語発音コーチング",
+      lessonMenu: "レッスンメニュー",
+      deliveryNote: "実施方法は、選択した講師空き枠に合わせて自動反映されます。対面枠は開催地の事前確認が必要です。",
+      selectedSlots: "選択中の候補枠",
+      selectedSlotPlaceholder: "講師空き時間カレンダーから候補枠を選択してください。",
+      selectedSlotCount: (count: number) => `${count}枠を選択中`,
+      deliveryMode: "実施方法",
+      deliveryAuto: "空き枠を選択すると自動反映されます。",
+      mixedDelivery: "複数（オンライン・対面）",
+      noManualSlot: "日時は講師空き時間カレンダーから選択してください。手入力による予約リクエストは受け付けていません。",
+      recurringRequest: "定期予約としてリクエストする",
+      recurringNote: "複数枠を選択した場合は、定期予約候補としてまとめて講師へリクエストされます。",
+      purpose: "目的・相談内容（任意）",
+      availabilityTitle: "講師空き時間カレンダー",
+      availabilityLead: "講師が公開した候補枠のうち、まだ予約が入っていない枠だけを表示しています。枠をクリックすると、予約リクエストの希望日時に反映されます。",
+      bookingCalendarTitle: "予約カレンダー",
+      changeTitle: "日程変更・キャンセルリクエスト",
+      changeLead: "予約確定後、日程変更やキャンセルが必要な場合は、理由を添えてリクエストを送信してください。内容確認後、メールでご案内します。",
+      requestType: "リクエスト種別",
+      reschedule: "日程変更",
+      cancel: "キャンセル",
+      targetBooking: "対象予約",
+      reasonRequired: "理由（必須）",
+      changeSubmit: "リクエストを送信",
+      changeValidationError: "日程変更・キャンセルリクエストには理由の入力が必要です。",
+      changeSuccess: (requestType: string) => `${requestType}リクエストを送信しました。内容確認後、メールでご案内します。`,
+      changeMailError: (requestType: string) => `${requestType}リクエストを記録しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。`,
+      bookingTimelineTitle: "予約タイムライン",
+      statusLabel: "ステータス",
+      detailLabel: "詳細",
+      twelveHourLabel: "12時間前ルール",
+      twelveHourClose: "個別確認が必要です",
+      twelveHourOpen: "通常受付期間内です",
+      noConfirmedBookings: "確定した予約はまだありません。",
+      noLessonNote: "この予約のレッスンメモはまだ登録されていません。",
+      futureLessonNote: "未来の予約です。レッスン終了後にノートを表示します。",
+      previousMonth: "前月",
+      nextMonth: "翌月"
+    },
+    en: {
+      loginTitle: "Student Dashboard",
+      loginLead: "Enter your registered email address to view booking information linked to that address.",
+      registeredEmail: "Registered email address",
+      loginButton: "Continue",
+      dashboardTitle: "Bookings, Packages, and Lesson History",
+      dashboardLead: "You can check booking requests, confirmed bookings, and package status. Schedule details will be shared by email after review.",
+      switchButton: "Switch",
+      remainingLessons: "Remaining lessons",
+      nextCheck: "Next check",
+      customerStatus: "Lesson status",
+      lessonCount: (count: number) => `${count} lesson${count === 1 ? "" : "s"}`,
+      bookingRequestTitle: "Send Booking Request",
+      bookingRequestLead: "Send your preferred schedule and lesson details. Schedule information will be shared by email after review.",
+      blockedMessage: "Booking requests cannot be accepted from this email address.",
+      validationError: "Please check the required fields and email format. The booking request has not been sent yet.",
+      bookingSuccess: (count: number) => `${count} booking request${count === 1 ? "" : "s"} sent. Schedule details will be shared by email after review.`,
+      bookingMailError: (count: number) => `${count} booking request${count === 1 ? "" : "s"} created, but the email notification could not be sent. Please contact us directly if needed.`,
+      name: "Name",
+      loginEmail: "Login email",
+      lessonKind: "Lesson type",
+      japaneseLesson: "1-on-1 Japanese Lesson",
+      englishLesson: "English Pronunciation Coaching",
+      lessonMenu: "Lesson menu",
+      deliveryNote: "The delivery format is set automatically from the selected tutor availability slot. In-person lessons require location confirmation in advance.",
+      selectedSlots: "Selected time slots",
+      selectedSlotPlaceholder: "Please select a time slot from the tutor availability calendar.",
+      selectedSlotCount: (count: number) => `${count} slot${count === 1 ? "" : "s"} selected`,
+      deliveryMode: "Delivery format",
+      deliveryAuto: "This will update automatically after you select a time slot.",
+      mixedDelivery: "Mixed (online / in person)",
+      noManualSlot: "Please select a time slot from the tutor availability calendar. Manual date entry is not accepted for booking requests.",
+      recurringRequest: "Request as recurring booking",
+      recurringNote: "When multiple slots are selected, they will be sent together as recurring booking candidates.",
+      purpose: "Purpose / message (optional)",
+      availabilityTitle: "Tutor Availability Calendar",
+      availabilityLead: "Only open tutor slots without existing bookings are shown. Click a slot to add it to your booking request.",
+      bookingCalendarTitle: "Booking Calendar",
+      changeTitle: "Reschedule / Cancellation Request",
+      changeLead: "If you need to reschedule or cancel after your booking is confirmed, please send a request with the reason. Details will be shared by email after review.",
+      requestType: "Request type",
+      reschedule: "Reschedule",
+      cancel: "Cancel",
+      targetBooking: "Target booking",
+      reasonRequired: "Reason (required)",
+      changeSubmit: "Send Request",
+      changeValidationError: "A reason is required for reschedule or cancellation requests.",
+      changeSuccess: (requestType: string) => `${requestType} request sent. Details will be shared by email after review.`,
+      changeMailError: (requestType: string) => `${requestType} request recorded, but the email notification could not be sent. Please contact us directly if needed.`,
+      bookingTimelineTitle: "Booking Timeline",
+      statusLabel: "Status",
+      detailLabel: "Details",
+      twelveHourLabel: "12-hour policy",
+      twelveHourClose: "Individual review required",
+      twelveHourOpen: "Within the standard request window",
+      noConfirmedBookings: "There are no confirmed bookings yet.",
+      noLessonNote: "Lesson notes have not been added for this booking yet.",
+      futureLessonNote: "This is a future booking. Lesson notes will appear after the lesson.",
+      previousMonth: "Previous month",
+      nextMonth: "Next month"
+    },
+    "zh-Hant": {
+      loginTitle: "學生頁面",
+      loginLead: "輸入註冊電子郵件後，可查看與該信箱相關的預約資訊。",
+      registeredEmail: "註冊電子郵件",
+      loginButton: "確認",
+      dashboardTitle: "預約、套裝課程與學習紀錄",
+      dashboardLead: "可確認預約申請、已確認的預約與課程套裝狀態。日程確認後會以電子郵件通知。",
+      switchButton: "切換",
+      remainingLessons: "剩餘課程",
+      nextCheck: "下次確認",
+      customerStatus: "上課狀態",
+      lessonCount: (count: number) => `${count}堂`,
+      bookingRequestTitle: "送出預約申請",
+      bookingRequestLead: "請送出希望時間與課程內容。確認後會以電子郵件通知日程。",
+      blockedMessage: "此電子郵件無法送出預約申請。",
+      validationError: "請確認必填項目與電子郵件格式。預約申請尚未送出。",
+      bookingSuccess: (count: number) => `已送出 ${count} 件預約申請。確認後會以電子郵件通知日程。`,
+      bookingMailError: (count: number) => `已建立 ${count} 件預約申請，但電子郵件通知未能送出。如有需要請直接聯絡。`,
+      name: "姓名",
+      loginEmail: "登入電子郵件",
+      lessonKind: "課程類型",
+      japaneseLesson: "1對1日語課程",
+      englishLesson: "英語發音教練課",
+      lessonMenu: "課程選單",
+      deliveryNote: "上課方式會依選擇的講師空檔自動反映。實體課程需事先確認地點。",
+      selectedSlots: "已選候選時段",
+      selectedSlotPlaceholder: "請從講師空檔日曆選擇候選時段。",
+      selectedSlotCount: (count: number) => `已選擇 ${count} 個時段`,
+      deliveryMode: "上課方式",
+      deliveryAuto: "選擇空檔後會自動反映。",
+      mixedDelivery: "多種方式（線上／實體）",
+      noManualSlot: "請從講師空檔日曆選擇時間。預約申請不接受手動輸入日期。",
+      recurringRequest: "作為固定預約提出申請",
+      recurringNote: "選擇多個時段時，會作為固定預約候選一併送出。",
+      purpose: "目的／諮詢內容（選填）",
+      availabilityTitle: "講師空檔日曆",
+      availabilityLead: "僅顯示講師公開且尚未被預約的候選時段。點選時段後會加入預約申請。",
+      bookingCalendarTitle: "預約日曆",
+      changeTitle: "改期／取消申請",
+      changeLead: "預約確認後，如需改期或取消，請附上理由送出申請。確認後會以電子郵件通知。",
+      requestType: "申請類型",
+      reschedule: "改期",
+      cancel: "取消",
+      targetBooking: "對象預約",
+      reasonRequired: "理由（必填）",
+      changeSubmit: "送出申請",
+      changeValidationError: "改期或取消申請必須填寫理由。",
+      changeSuccess: (requestType: string) => `已送出${requestType}申請。確認後會以電子郵件通知。`,
+      changeMailError: (requestType: string) => `已記錄${requestType}申請，但電子郵件通知未能送出。如有需要請直接聯絡。`,
+      bookingTimelineTitle: "預約時間軸",
+      statusLabel: "狀態",
+      detailLabel: "詳細內容",
+      twelveHourLabel: "12小時規則",
+      twelveHourClose: "需個別確認",
+      twelveHourOpen: "在一般受理期間內",
+      noConfirmedBookings: "目前尚無已確認的預約。",
+      noLessonNote: "此預約尚未登錄課程筆記。",
+      futureLessonNote: "這是未來的預約。課程結束後會顯示課程筆記。",
+      previousMonth: "上個月",
+      nextMonth: "下個月"
+    }
+  };
+
+  return copies[language];
 }
 
 function getMode(path: string) {
@@ -1917,7 +2142,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "カテゴリごとにコース内容を整理しています。各コースはタイルで確認できます。購入回数・時間は下の「コース購入」で選択できます。",
       purchaseTitle: "コース購入",
-      purchaseLead: "予約確定後に請求・決済導線をご案内します。ここでは希望コースと購入回数の目安を確認できます。",
+      purchaseLead: "こちらからレッスンパッケージの購入が可能です。オンラインレッスンは、ご希望のレッスン形態を選択し「購入画面へ」を押してください。予約確定後に請求・決済導線をご案内します。",
       lessonMenu: "レッスンメニュー",
       selected: "選択中",
       duration: "授業時間",
@@ -1945,7 +2170,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "Lesson options are organized by learning purpose. Course details are shown as tiles, and lesson count and duration can be selected in Course Purchase below.",
       purchaseTitle: "Course Purchase",
-      purchaseLead: "After the booking is confirmed, invoice and payment instructions will be shared. This area lets you check your preferred course and purchase count.",
+      purchaseLead: "You can request a lesson package purchase here. For online lessons, select your preferred lesson format and press “Purchase screen”. Invoice and payment instructions will be shared after the booking is confirmed.",
       lessonMenu: "Lesson menu",
       selected: "Selected",
       duration: "Duration",
@@ -1973,7 +2198,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "課程選單",
       menuLead: "課程依學習目的整理。各課程以卡片呈現，購買堂數與時間可在下方「課程購買」中選擇。",
       purchaseTitle: "課程購買",
-      purchaseLead: "預約確認後，將提供請款與付款方式。此區可先確認希望課程與購買堂數。",
+      purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。預約確認後，將提供請款與付款方式。",
       lessonMenu: "課程選單",
       selected: "目前選擇",
       duration: "課程時間",
@@ -2112,11 +2337,11 @@ function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {
       title: "レッスンルール",
       ruleTitle: "レッスンのルール",
       rules: [
-        "予約はリクエスト制です",
+        "ご希望日時を送信後、日程をご案内します",
         "オンラインレッスンは、Zoomにて行います",
         "Zoom録画も可能です。希望される方は事前にお知らせください",
         "レッスン受講前に通信環境・デバイスの確認をお願いします",
-        "生徒側からレッスン予定を直接キャンセルすることはできません。日程変更は講師承認後に反映されます",
+        "日程変更やキャンセルが必要な場合は、理由を添えてご連絡ください。確認後にご案内します",
         "12時間前を過ぎたタイミングでの日程変更は、原則として返金いたしかねます",
         priceRule.ja
       ]
@@ -2125,11 +2350,11 @@ function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {
       title: "Lesson Rules",
       ruleTitle: "Lesson Rules",
       rules: [
-        "Bookings are request-based.",
+        "Send your preferred time, and schedule details will be shared by email.",
         "Online lessons are held on Zoom.",
         "Zoom recording is available upon advance request.",
         "Please check your internet connection and device before the lesson.",
-        "Students cannot directly cancel a confirmed lesson. Schedule changes apply only after tutor approval.",
+        "If you need to reschedule or cancel, please send a request with the reason. Details will be confirmed by email.",
         "Reschedule requests made within 12 hours of the lesson are generally non-refundable.",
         priceRule.en
       ]
@@ -2138,11 +2363,11 @@ function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {
       title: "課程規則",
       ruleTitle: "課程規則",
       rules: [
-        "預約採申請制。",
+        "送出希望時間後，將以電子郵件通知日程。",
         "線上課程使用 Zoom 進行。",
         "如需 Zoom 錄影，請事先告知。",
         "上課前請確認網路環境與設備。",
-        "學生不能自行取消已排定課程。改期需經教師核准後才會生效。",
+        "如需改期或取消，請附上理由提出申請。確認後將以郵件通知。",
         "課程開始前 12 小時內提出改期，原則上不予退款。",
         priceRule["zh-Hant"]
       ]
@@ -2156,12 +2381,13 @@ function getReviewCopy(language: PlatformLanguage) {
   const copies = {
     ja: {
       title: "レッスンレビュー",
-      summary: "Leoが承認したレビューのみ掲載します。",
+      summary: "受講者から寄せられたレッスンレビューを掲載しています。",
+      badge: "Learner voices",
       reviewsTitle: "レッスンレビュー",
       reviewsNote: "受講者から寄せられたレビューを掲載しています。",
       noReviews: "掲載中のレビューはまだありません。",
       formTitle: "新しいレビューを書く",
-      approvalRule: "投稿されたレビューは、講師の承認後に掲載されます。",
+      formLead: "レビューを投稿できます。ご感想や受講後の変化などをお聞かせください。",
       name: "表示名",
       email: "メールアドレス",
       rating: "評価",
@@ -2170,12 +2396,13 @@ function getReviewCopy(language: PlatformLanguage) {
     },
     en: {
       title: "Lesson Reviews",
-      summary: "Only reviews approved by Leo are displayed.",
+      summary: "Lesson reviews from students are shown here.",
+      badge: "Learner voices",
       reviewsTitle: "Lesson Reviews",
-      reviewsNote: "Reviews from students are shown here after approval.",
+      reviewsNote: "Reviews from students are shown here.",
       noReviews: "No reviews are published yet.",
       formTitle: "Write a new review",
-      approvalRule: "Submitted reviews are published only after tutor approval.",
+      formLead: "You can leave a lesson review here. Share your experience or what changed after the lesson.",
       name: "Display name",
       email: "Email",
       rating: "Rating",
@@ -2184,12 +2411,13 @@ function getReviewCopy(language: PlatformLanguage) {
     },
     "zh-Hant": {
       title: "課程評價",
-      summary: "只會顯示 Leo 核准的評價。",
+      summary: "此處刊登學生留下的課程評價。",
+      badge: "Learner voices",
       reviewsTitle: "課程評價",
-      reviewsNote: "此處刊登學生留下並經核准的評價。",
+      reviewsNote: "此處刊登學生留下的評價。",
       noReviews: "目前尚無公開評價。",
       formTitle: "留下新的評價",
-      approvalRule: "提交的評價需經教師核准後才會公開。",
+      formLead: "可在此留下課程評價。歡迎分享上課感想或學習後的變化。",
       name: "顯示名稱",
       email: "電子郵件",
       rating: "評分",
@@ -2343,12 +2571,13 @@ function getSlotDurationMinutes(slot: TutorAvailabilitySlot) {
   return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
 }
 
-function summarizeDeliveryModes(slots: TutorAvailabilitySlot[]) {
-  if (slots.length === 0) return "空き枠を選択すると自動反映されます。";
+function summarizeDeliveryModes(slots: TutorAvailabilitySlot[], language: PlatformLanguage) {
+  const copy = getStudentPageCopy(language);
+  if (slots.length === 0) return copy.deliveryAuto;
   const hasOnline = slots.some((slot) => slot.deliveryMode === "online");
   const hasInPerson = slots.some((slot) => slot.deliveryMode === "inPerson");
-  if (hasOnline && hasInPerson) return "複数（オンライン・対面）";
-  return hasOnline ? "オンライン" : "対面";
+  if (hasOnline && hasInPerson) return copy.mixedDelivery;
+  return hasOnline ? formatDeliveryMode("online", language) : formatDeliveryMode("inPerson", language);
 }
 
 function parseDateInput(value: string) {

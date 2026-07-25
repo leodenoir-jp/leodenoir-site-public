@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { AboutPage } from "./pages/AboutPage";
 import { ContactPage } from "./pages/ContactPage";
 import { HomePage } from "./pages/HomePage";
+import { LearningPlatformPage } from "./pages/LearningPlatformPage";
 import { LegalPageView } from "./pages/LegalPageView";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ServiceDetailPage } from "./pages/ServiceDetailPage";
@@ -47,6 +48,9 @@ function renderPage(route: Route) {
   if (route.path === "/about") return <AboutPage route={route} />;
   if (route.path === "/services") return <ServicesPage route={route} />;
   if (route.path === "/contact") return <ContactPage />;
+  if (route.path === "/learning" || route.path.startsWith("/learning/") || route.path === "/platform") {
+    return <LearningPlatformPage route={route} />;
+  }
   if (route.path === "/terms" || route.path === "/privacy" || route.path === "/specified-commercial-transactions") {
     return <LegalPageView route={route} />;
   }

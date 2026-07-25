@@ -27,6 +27,7 @@ export const siteConfig = {
     { label: "TOP", href: "/" },
     { label: "About Me", href: "/about" },
     { label: "Services", href: "/services" },
+    { label: "Learning", href: "/learning" },
     { label: "利用規約", href: "/terms" },
     { label: "Contact", href: "/contact" }
   ]

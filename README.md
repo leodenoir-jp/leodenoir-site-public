@@ -128,6 +128,19 @@ snsLinks: [
 
 同じファイル名で置き換えるか、`src/data/services.ts` の `image` を新しいパスに変更してください。
 
+## Learning / Platform V1
+
+日本語レッスン・英語発音コーチング用のV1プラットフォーム画面を追加しています。
+
+- `/learning`: 学習サービス入口
+- `/learning/japanese`: 1on1日本語レッスン
+- `/learning/english`: 英語発音コーチング
+- `/platform`: 受講者ダッシュボード
+- `/platform/tutor`: 講師ダッシュボード
+- `/platform/agents`: Sales Growth / Customer Success / Business Intelligence コンソール
+
+画面内の予約、請求、チャット、ファイル、AI部門の実行はV1デモです。決済、ログイン、外部カレンダー、メール送信、ストレージ、D1/R2等の永続化は未接続で、実運用前に認証・権限・データベース・決済プロバイダの設定が必要です。
+
 ## 問い合わせフォーム
 
 Contactページのフォームは Vercel Functions の `/api/contact` へ送信し、Resend 経由でメール送信します。

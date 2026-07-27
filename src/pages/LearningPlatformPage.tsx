@@ -1,4 +1,4 @@
-﻿import { type FormEvent, useEffect, useMemo, useState } from "react";
+﻿import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "../App";
 import { Seo } from "../components/Seo";
 import { importedLessonReviews } from "../data/lessonReviews";
@@ -1759,7 +1759,9 @@ function StudentDashboard({
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authProvider, setAuthProvider] = useState<StudentProfile["provider"]>("email");
   const [authMessage, setAuthMessage] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const [blockEmail, setBlockEmail] = useState("");
+  const emailAuthRef = useRef<HTMLDivElement>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
@@ -1782,6 +1784,37 @@ function StudentDashboard({
   const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
   const packageSummary = buildStudentPackageSummary(activeCustomer.email, bookings, activeCustomer, activeProfile?.studentId);
 
+  const startGoogleAuth = async () => {
+    setAuthProvider("google");
+    setAuthMessage("");
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setAuthMessage("Google認証はSupabase設定後に利用できます。Emailを選択してください。");
+      return;
+    }
+
+    setAuthBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/platform`
+      }
+    });
+    if (error) {
+      setAuthMessage(error.message);
+      setAuthBusy(false);
+    }
+  };
+
+  const selectEmailAuth = () => {
+    setAuthProvider("email");
+    setAuthMessage("");
+    window.setTimeout(() => {
+      emailAuthRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 0);
+  };
+
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextEmail = loginEmail.trim().toLowerCase();
@@ -1791,13 +1824,7 @@ function StudentDashboard({
       if (!supabase) return;
 
       if (authProvider === "google") {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: `${window.location.origin}/platform`
-          }
-        });
-        if (error) setAuthMessage(error.message);
+        await startGoogleAuth();
         return;
       }
 
@@ -1830,6 +1857,11 @@ function StudentDashboard({
         })
       });
       setAuthMessage(response.ok ? "サインイン用リンクをメールで送信しました。メールをご確認ください。" : "StudentIDまたはメールアドレスを確認してください。");
+      return;
+    }
+
+    if (authProvider === "google") {
+      await startGoogleAuth();
       return;
     }
 
@@ -1915,26 +1947,33 @@ function StudentDashboard({
             </button>
           </div>
           <div className="auth-provider-grid">
-            {(["google", "email"] as StudentProfile["provider"][]).map((provider) => (
-              <button key={provider} className={`button secondary ${authProvider === provider ? "active" : ""}`} type="button" onClick={() => setAuthProvider(provider)}>
-                {formatAuthProvider(provider)}
-              </button>
-            ))}
+            <button className={`button secondary ${authProvider === "google" ? "active" : ""}`} type="button" onClick={() => void startGoogleAuth()} disabled={authBusy}>
+              {authBusy ? "Googleへ移動中..." : "Google"}
+            </button>
+            <button className={`button secondary ${authProvider === "email" ? "active" : ""}`} type="button" onClick={selectEmailAuth}>
+              Email
+            </button>
           </div>
-          {authMode === "signup" ? (
-            <label>
-              {text.name}
-              <input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="Mika Chen" />
-            </label>
+          {authProvider === "email" ? (
+            <div ref={emailAuthRef} className="email-auth-fields is-active">
+              {authMode === "signup" ? (
+                <label>
+                  {text.name}
+                  <input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="Mika Chen" />
+                </label>
+              ) : null}
+              <label>
+                {authMode === "signup" ? text.registeredEmail : text.signInIdentifier}
+                <input type={authMode === "signup" ? "email" : "text"} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={authMode === "signup" ? "mika@example.com" : "STU-2201 / mika@example.com"} required />
+              </label>
+            </div>
           ) : null}
-          <label>
-            {authMode === "signup" ? text.registeredEmail : text.signInIdentifier}
-            <input type={authMode === "signup" ? "email" : "text"} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={authMode === "signup" ? "mika@example.com" : "STU-2201 / mika@example.com"} required />
-          </label>
           {authMessage ? <p className={authMessage.startsWith("StudentID") ? "form-success" : "form-error"}>{authMessage}</p> : null}
-          <button className="button primary" type="submit">
-            {authMode === "signup" ? text.signUpButton : text.loginButton}
-          </button>
+          {authProvider === "email" ? (
+            <button className="button primary" type="submit">
+              {authMode === "signup" ? text.signUpButton : text.loginButton}
+            </button>
+          ) : null}
         </form>
       </div>
     );

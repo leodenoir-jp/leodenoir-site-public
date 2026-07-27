@@ -1519,6 +1519,31 @@ textarea {
   width: 100%;
 }
 
+.email-auth-fields {
+  background: #f7fbfd;
+  border: 1px solid rgba(104, 154, 176, 0.28);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 4px rgba(132, 184, 207, 0.1);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.email-auth-fields.is-active {
+  animation: email-auth-highlight 900ms ease-out;
+}
+
+@keyframes email-auth-highlight {
+  0% {
+    border-color: rgba(56, 111, 137, 0.74);
+    box-shadow: 0 0 0 7px rgba(132, 184, 207, 0.2);
+  }
+  100% {
+    border-color: rgba(104, 154, 176, 0.28);
+    box-shadow: 0 0 0 4px rgba(132, 184, 207, 0.1);
+  }
+}
+
 .student-session {
   align-items: flex-end;
   display: grid;

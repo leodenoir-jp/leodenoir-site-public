@@ -85,15 +85,17 @@ function Footer({ route }: { route: Route }) {
         </section>
         <section>
           <h2>SNS Links</h2>
-          <ul>
+          <ul className="footer-sns-icons">
             {siteConfig.snsLinks.map((sns) => (
               <li key={sns.label}>
                 {sns.url ? (
-                  <a href={sns.url} target="_blank" rel="noreferrer">
-                    {sns.label}
+                  <a href={sns.url} target="_blank" rel="noreferrer" aria-label={sns.label}>
+                    <img src={sns.logoPath} alt="" />
                   </a>
                 ) : (
-                  <span>{sns.label}（URL未設定）</span>
+                  <span aria-label={`${sns.label}（URL未設定）`}>
+                    <img src={sns.logoPath} alt="" />
+                  </span>
                 )}
               </li>
             ))}

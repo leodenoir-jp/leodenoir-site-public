@@ -1914,7 +1914,7 @@ function StudentDashboard({
               {text.signUp}
             </button>
           </div>
-          <div className="platform-grid three">
+          <div className="auth-provider-grid">
             {(["google", "email"] as StudentProfile["provider"][]).map((provider) => (
               <button key={provider} className={`button secondary ${authProvider === provider ? "active" : ""}`} type="button" onClick={() => setAuthProvider(provider)}>
                 {formatAuthProvider(provider)}

@@ -1,5 +1,6 @@
 ﻿import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "../App";
+import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
 import { importedLessonReviews } from "../data/lessonReviews";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
@@ -550,6 +551,19 @@ function LearningHome({ route, language }: { route: Route; language: PlatformLan
           <p>1on1日本語レッスンと英語発音コーチングの内容・料金・受講方法を確認できます。目的や現在地に合わせて、必要なメニューをお選びください。</p>
         </div>
         <p className="platform-badge">Online / In-person</p>
+      </div>
+      <div className="platform-card">
+        <p className="eyebrow">Learning Account</p>
+        <h3>Leo de Noir / Workaholic Owl の学習者向けログインについて</h3>
+        <p>
+          受講者向けページでは、Google認証またはメールリンクを利用して、予約リクエスト、確定済み予約、受講履歴、購入済みレッスンパッケージの状況を確認できます。
+        </p>
+        <p>
+          Google認証を利用する場合、Googleアカウントの氏名、メールアドレス、プロフィール画像が提供される場合があります。これらの情報は、受講者アカウントの識別、Student IDとの紐づけ、予約管理、レッスンに関する重要な連絡のために使用します。広告配信や不要な第三者提供には使用しません。
+        </p>
+        <p>
+          個人情報の取扱いについては <a href="/privacy" onClick={(event) => handleNav(event, "/privacy", route.navigate)}>プライバシーポリシー</a> をご確認ください。
+        </p>
       </div>
       <div className="platform-grid two">
         {lessonProducts.map((product) => {

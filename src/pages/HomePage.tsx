@@ -26,9 +26,6 @@ export function HomePage({ route }: { route: Route }) {
             <p>
               仕事、キャリア、人間関係、組織づくり、教育、表現活動に関するご相談を承ります。
             </p>
-            <p>
-              1on1日本語レッスンおよび英語発音コーチングでは、受講者向けページを通じて、レッスンメニュー、予約状況、受講履歴、レッスンパッケージを確認できます。
-            </p>
             <div className="button-row">
               <a className="button primary" href="/services" onClick={(event) => handleNav(event, "/services", route.navigate)}>
                 Servicesを見る
@@ -116,7 +113,6 @@ export function HomePage({ route }: { route: Route }) {
           <SectionHeader eyebrow="Site Guide" title="サイト案内" />
           <a href="/about" onClick={(event) => handleNav(event, "/about", route.navigate)}>About Me：運営者と活動理念について</a>
           <a href="/services" onClick={(event) => handleNav(event, "/services", route.navigate)}>Services：サービス一覧</a>
-          <a href="/learning" onClick={(event) => handleNav(event, "/learning", route.navigate)}>Learning：1on1日本語レッスン・英語発音コーチング</a>
           <a href="/terms" onClick={(event) => handleNav(event, "/terms", route.navigate)}>利用規約</a>
           <a href="/contact" onClick={(event) => handleNav(event, "/contact", route.navigate)}>Contact：問い合わせ</a>
         </div>

@@ -434,13 +434,19 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   return (
     <>
-      <Seo title="Learning Menu" description="Leo de Noir / Workaholic Owl の1on1日本語レッスン・英語発音コーチングの学習者向けページです。" />
+      <Seo
+        title="Learning Menu"
+        description="Leo de Noir / Workaholic Owl の Learning Menu は、1on1日本語レッスンと英語発音コーチングの受講申込み、予約管理、受講履歴の確認ができる学習者向けサービスです。"
+      />
       <section className="page-hero platform-hero">
         <div className="container platform-hero-grid">
           <div>
-            <p className="eyebrow">Learning</p>
+            <p className="eyebrow">Leo de Noir / Workaholic Owl</p>
             <h1>Learning Menu</h1>
-            <p>Leo de Noir / Workaholic Owl の1on1日本語レッスンと英語発音コーチングについて、メニュー、受講方法、予約状況を確認できる学習者向けページです。</p>
+            <p>
+              Leo de Noir / Workaholic Owl の Learning Menu は、1on1日本語レッスンと英語発音コーチングのメニュー・受講方法を確認し、
+              受講申込み、予約リクエスト、確定済み予約、受講履歴、購入済みレッスンパッケージを管理するための学習者向けサービスです。
+            </p>
           </div>
           <div className="platform-switcher" aria-label="Language selector">
             {(Object.keys(languageLabels) as PlatformLanguage[]).map((item) => (
@@ -553,16 +559,29 @@ function LearningHome({ route, language }: { route: Route; language: PlatformLan
         <p className="platform-badge">Online / In-person</p>
       </div>
       <div className="platform-card">
-        <p className="eyebrow">Learning Account</p>
-        <h3>Leo de Noir / Workaholic Owl の学習者向けログインについて</h3>
+        <p className="eyebrow">App Information</p>
+        <h3>Leo de Noir / Workaholic Owl Learning Menu</h3>
         <p>
-          受講者向けページでは、Google認証またはメールリンクを利用して、予約リクエスト、確定済み予約、受講履歴、購入済みレッスンパッケージの状況を確認できます。
+          本サービスでは、Googleログインまたはメールリンクを利用して学習者アカウントを作成・認証します。ログイン後は、レッスンの予約リクエスト、
+          確定済み予約、受講履歴、購入済みレッスンパッケージの状況を確認できます。
         </p>
         <p>
-          Google認証を利用する場合、Googleアカウントの氏名、メールアドレス、プロフィール画像が提供される場合があります。これらの情報は、受講者アカウントの識別、Student IDとの紐づけ、予約管理、レッスンに関する重要な連絡のために使用します。広告配信や不要な第三者提供には使用しません。
+          Googleログインでは、Googleアカウントの氏名、メールアドレス、プロフィール画像、Googleが発行するアカウント識別子を取得する場合があります。
+          取得した情報は、学習者アカウントの作成・識別、Student IDとの紐づけ、本人認証、予約管理、受講履歴・購入済みパッケージの表示、
+          レッスンに関する連絡のためだけに使用します。Gmail、Googleドライブ、Googleカレンダーのデータにはアクセスせず、広告配信、データ販売、
+          信用評価、AIモデルの学習には使用しません。
+        </p>
+        <p lang="en">
+          Leo de Noir / Workaholic Owl Learning Menu is a learner service for 1-on-1 Japanese lessons and English pronunciation coaching.
+          Users can review lesson menus and methods, request enrollment and bookings, and check confirmed bookings, lesson history, and purchased lesson packages.
+          Google Sign-In may provide the user&apos;s name, email address, profile image, and Google account identifier. We use this information only to create and
+          identify the learner account, link a Student ID, authenticate the user, manage bookings, display lesson history and purchased packages, and send
+          lesson-related communications. We do not access Gmail, Google Drive, or Google Calendar data, and we do not use Google user data for advertising,
+          data sales, credit decisions, or AI model training.
         </p>
         <p>
-          個人情報の取扱いについては <a href="/privacy" onClick={(event) => handleNav(event, "/privacy", route.navigate)}>プライバシーポリシー</a> をご確認ください。
+          Googleユーザーデータを含む個人情報の取得、利用、保存、共有、削除については{" "}
+          <a href="/privacy" onClick={(event) => handleNav(event, "/privacy", route.navigate)}>プライバシーポリシー</a>をご確認ください。
         </p>
       </div>
       <div className="platform-grid two">

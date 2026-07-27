@@ -516,8 +516,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 function PlatformNav({ route, activePath }: { route: Route; activePath: string }) {
   const links = [
     { href: "/learning", label: "Summary" },
-    { href: "/learning/japanese", label: "Japanese" },
-    { href: "/learning/english", label: "英語発音コーチング" },
+    { href: "/learning/japanese", label: "Japanese Lesson" },
+    { href: "/learning/english", label: "English Coaching" },
     { href: "/platform", label: "Student Page" },
     { href: "/learning/reviews", label: "Lesson Review" }
   ];

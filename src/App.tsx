@@ -14,7 +14,15 @@ export type Route = {
   navigate: (href: string) => void;
 };
 
+const hasSupabaseAuthCallback = () => {
+  const params = new URLSearchParams(window.location.search);
+  return params.has("code") || window.location.hash.includes("access_token") || window.location.hash.includes("error");
+};
+
 const normalizePath = () => {
+  if (hasSupabaseAuthCallback() && window.location.pathname !== "/platform") {
+    window.history.replaceState({}, "", `/platform${window.location.search}${window.location.hash}`);
+  }
   const path = window.location.pathname.replace(/\/$/, "");
   return path === "" ? "/" : path;
 };

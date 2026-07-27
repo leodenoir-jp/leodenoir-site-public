@@ -433,13 +433,13 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   return (
     <>
-      <Seo title="Learning Platform" description="Leo de Noir の日本語レッスン・英語発音コーチング予約ページです。" />
+      <Seo title="Learning Menu" description="Leo de Noir / Workaholic Owl の1on1日本語レッスン・英語発音コーチングの学習者向けページです。" />
       <section className="page-hero platform-hero">
         <div className="container platform-hero-grid">
           <div>
             <p className="eyebrow">Learning</p>
             <h1>Learning Menu</h1>
-            <p>1on1日本語レッスンと英語発音コーチングのメニュー確認、予約リクエスト、受講者向け予約確認ページです。</p>
+            <p>Leo de Noir / Workaholic Owl の1on1日本語レッスンと英語発音コーチングについて、メニュー、受講方法、予約状況を確認できる学習者向けページです。</p>
           </div>
           <div className="platform-switcher" aria-label="Language selector">
             {(Object.keys(languageLabels) as PlatformLanguage[]).map((item) => (

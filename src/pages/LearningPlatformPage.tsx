@@ -226,7 +226,15 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
     const applyUser = async (user: SupabaseUserLike | null) => {
       if (!mounted || !user?.email) return;
-      const profile = await ensureSupabaseStudentProfile(user, studentProfiles);
+      let profile: StudentProfile;
+      try {
+        profile = await ensureSupabaseStudentProfile(user, studentProfiles);
+      } catch (error) {
+        console.error("Supabase student profile sync failed.", {
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+        profile = buildStudentProfileFromSupabaseUser(user, studentProfiles);
+      }
       if (!mounted) return;
       if (!studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
         setStudentProfiles([...studentProfiles, profile]);
@@ -236,7 +244,32 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       window.localStorage.setItem(studentEmailKey, profile.email);
     };
 
-    supabase.auth.getUser().then(({ data }) => applyUser(data.user));
+    const resolveAuthSession = async () => {
+      const hasAuthCode = new URLSearchParams(window.location.search).has("code");
+      if (hasAuthCode) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        if (error) {
+          console.error("Supabase OAuth callback exchange failed.", { message: error.message });
+        } else {
+          window.history.replaceState({}, "", window.location.pathname);
+          await applyUser(data.session?.user ?? null);
+        }
+      }
+
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Supabase session lookup failed.", { message: error.message });
+      }
+      await applyUser(data.session?.user ?? null);
+    };
+
+    void resolveAuthSession();
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Supabase user lookup failed.", { message: error.message });
+      }
+      return applyUser(data.user);
+    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       void applyUser(session?.user ?? null);
     });
@@ -2390,6 +2423,21 @@ function formatAuthProvider(provider: StudentProfile["provider"]) {
 function mapSupabaseProvider(provider: unknown): StudentProfile["provider"] {
   if (provider === "google") return "google";
   return "email";
+}
+
+function buildStudentProfileFromSupabaseUser(user: SupabaseUserLike, localProfiles: StudentProfile[]): StudentProfile {
+  const email = user.email?.toLowerCase() ?? "";
+  const provider = mapSupabaseProvider(user.app_metadata?.provider);
+  const fallbackName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : email.split("@")[0];
+  const localProfile = localProfiles.find((profile) => profile.email.toLowerCase() === email);
+
+  return localProfile ?? {
+    studentId: generateStudentId(localProfiles),
+    name: fallbackName,
+    email,
+    provider,
+    createdAt: new Date().toISOString()
+  };
 }
 
 async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfiles: StudentProfile[]) {

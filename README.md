@@ -139,7 +139,7 @@ snsLinks: [
 - `/platform/tutor`: 講師ダッシュボード
 - `/platform/agents`: Sales Growth / Customer Success / Business Intelligence コンソール
 
-画面内の予約、請求、チャット、ファイル、AI部門の実行はV1デモです。決済、ログイン、外部カレンダー、メール送信、ストレージ、D1/R2等の永続化は未接続で、実運用前に認証・権限・データベース・決済プロバイダの設定が必要です。
+画面内の予約、請求、チャット、ファイル、AI部門の実行はV1デモです。認証と生徒情報管理はSupabaseへ接続できる構成を用意しています。決済、外部カレンダー、ストレージ等の本番連携は未接続で、実運用前に権限・データベース・決済プロバイダの設定が必要です。
 
 ## 問い合わせフォーム
 
@@ -152,3 +152,20 @@ Vercelの Project Settings → Environment Variables に以下を設定してく
 - `CONTACT_FROM_EMAIL`: Resendで送信元として利用するメールアドレス
 
 送信先メールアドレス: `yu.leobiz003@outlook.com`
+
+## Supabase認証の設定
+
+Student Page のサインイン / サインアップは、Supabase Auth に接続できる構成です。Vercel以外へ移行する場合も、Supabase側の認証・データベース設定をそのまま利用できます。
+
+1. Supabaseでプロジェクトを作成します。
+2. `supabase/schema.sql` を Supabase SQL Editor で実行します。
+3. Supabase Auth の Redirect URL に以下を追加します。
+   - `http://127.0.0.1:5173/platform`
+   - `https://leodenoir.com/platform`
+4. Googleサインインを使う場合は、Supabase Auth Providers でGoogleを有効化します。Emailリンク認証もSupabase AuthのEmail設定で有効化します。
+5. Vercelの Project Settings → Environment Variables に以下を設定します。
+   - `VITE_SUPABASE_URL`: Supabase Project URL
+   - `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
+   - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
+
+`SUPABASE_SERVICE_ROLE_KEY` はサーバー側だけで使用します。GitHub、フロントエンドコード、公開ページには記載しないでください。

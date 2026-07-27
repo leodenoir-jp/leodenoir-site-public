@@ -175,11 +175,15 @@ export function AboutPage({ route }: { route: Route }) {
           </article>
           <article className="info-block">
             <h2>SNSでの活動</h2>
-            <ul>
+            <ul className="sns-activity-grid">
               {siteConfig.snsLinks.map((sns) => (
                 <li key={sns.label}>
-                  <a href={sns.url} target="_blank" rel="noreferrer">
-                    {sns.label}
+                  <a className="sns-activity-card" href={sns.url} target="_blank" rel="noreferrer" aria-label={`${sns.media} ${sns.accountName}`}>
+                    <span className="sns-media-name">{sns.media}</span>
+                    <span className="sns-card-body">
+                      <img className="sns-logo-image" src={sns.logoPath} alt="" />
+                      <span className="sns-account-name">{sns.accountName}</span>
+                    </span>
                   </a>
                 </li>
               ))}

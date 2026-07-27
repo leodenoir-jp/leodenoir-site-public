@@ -74,6 +74,17 @@ export type CustomerRecord = {
   language: PlatformLanguage;
   timezone: string;
   packageRemaining: number;
+  lessonCredits: {
+    lessonKind: LessonKind;
+    lessonMenuId: string;
+    packageLabel: string;
+    currency: "USD" | "JPY";
+    unitPrice: number;
+    purchasedLessons: number;
+    remainingLessons: number;
+    purchasedAt: string;
+    zoomLink?: string;
+  }[];
   renewalDue: string;
   consent: {
     marketing: boolean;
@@ -157,7 +168,7 @@ export const lessonProducts: LessonProduct[] = [
     timezoneLabel: "Asia/Tokyo / learner local time shown together",
     copy: {
       ja: {
-        eyebrow: "English Pronunciation Coaching",
+        eyebrow: "英語発音コーチング",
         title: "伝わる英語は、発音から整える。",
         summary: "日本語話者が聞き返されにくい英語へ近づくための、口・舌・息・リズムに特化したオンラインコーチングです。",
         outcomes: ["日本語話者が苦手な音の整理", "面接・会議・プレゼンの音読練習", "録音フィードバック", "話す負担を減らす発音設計"],
@@ -385,7 +396,7 @@ export const englishPronunciationMenus: LessonMenu[] = [
     id: "en-single",
     category: "発音コーチング",
     name: "1レッスン",
-    description: "単発で発音、音読、面接・プレゼン原稿などを確認します。",
+    description: "",
     currency: "JPY",
     unitPrice: 5000,
     unitMinutes: 50,
@@ -396,7 +407,7 @@ export const englishPronunciationMenus: LessonMenu[] = [
     id: "en-five",
     category: "発音コーチング",
     name: "5レッスン",
-    description: "苦手音、リズム、イントネーションを継続的に整える短期パッケージです。",
+    description: "",
     currency: "JPY",
     unitPrice: 4800,
     unitMinutes: 50,
@@ -407,7 +418,7 @@ export const englishPronunciationMenus: LessonMenu[] = [
     id: "en-ten",
     category: "発音コーチング",
     name: "10レッスン",
-    description: "発音の癖を定着まで扱う継続パッケージです。",
+    description: "",
     currency: "JPY",
     unitPrice: 4500,
     unitMinutes: 50,
@@ -465,6 +476,19 @@ export const demoCustomer: CustomerRecord = {
   language: "zh-Hant",
   timezone: "Asia/Tokyo",
   packageRemaining: 3,
+  lessonCredits: [
+    {
+      lessonKind: "japanese",
+      lessonMenuId: "jp-business-conversation",
+      packageLabel: "ビジネス会話 10レッスン",
+      currency: "USD",
+      unitPrice: 30,
+      purchasedLessons: 10,
+      remainingLessons: 3,
+      purchasedAt: "2026-07-20T10:00:00+09:00",
+      zoomLink: "https://zoom.us/j/leo-student-demo"
+    }
+  ],
   renewalDue: "2026-08-12",
   consent: {
     marketing: true,

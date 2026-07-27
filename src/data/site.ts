@@ -12,14 +12,26 @@ export const siteConfig = {
   snsLinks: [
     {
       label: "YouTube：Leo de Noir｜レオのよろず相談待合室",
+      media: "YouTube",
+      logoText: "YouTube",
+      logoPath: "/images/sns-youtube.png",
+      accountName: "Leo de Noir｜レオのよろず相談待合室",
       url: "/external/youtube"
     },
     {
       label: "Tiktok：れお[Leo de Noir運営者]",
+      media: "TikTok",
+      logoText: "TikTok",
+      logoPath: "/images/sns-tiktok.png",
+      accountName: "れお[Leo de Noir運営者]",
       url: "/external/tiktok"
     },
     {
       label: "note：leotimez",
+      media: "note",
+      logoText: "note",
+      logoPath: "/images/sns-note.png",
+      accountName: "leotimez",
       url: "/external/note"
     }
   ],

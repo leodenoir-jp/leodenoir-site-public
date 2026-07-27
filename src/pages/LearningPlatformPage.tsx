@@ -1,7 +1,8 @@
-﻿import { type FormEvent, useMemo, useState } from "react";
+﻿import { type FormEvent, useEffect, useMemo, useState } from "react";
 import type { Route } from "../App";
 import { Seo } from "../components/Seo";
 import { importedLessonReviews } from "../data/lessonReviews";
+import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
 import {
   type BookingRecord,
   type BookingStatus,
@@ -42,6 +43,21 @@ type RequestChange = {
   reason: string;
 };
 
+type StudentProfile = {
+  studentId: string;
+  name: string;
+  email: string;
+  provider: "google" | "email";
+  createdAt: string;
+};
+
+type SupabaseUserLike = {
+  id: string;
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+  app_metadata?: Record<string, unknown>;
+};
+
 type LessonReview = {
   id: string;
   studentName: string;
@@ -75,7 +91,10 @@ type TutorAvailabilitySlot = {
 const storageKey = "ldn-platform-language";
 const studentEmailKey = "ldn-platform-student-email";
 const availabilityStorageKey = "ldn-platform-tutor-availability";
+const bookingsStorageKey = "ldn-platform-bookings";
+const studentProfilesStorageKey = "ldn-platform-student-profiles";
 const ownerEmail = "yu.leobiz003@outlook.com";
+const tutorLoginPlaceholder = "yourtutor@info.com";
 
 const initialBlockedStudents = ["blocked.student@example.com"];
 const weekDayLabels = [
@@ -94,9 +113,11 @@ type PlatformNotification = {
   email: string;
   inquiryType: string;
   message: string;
+  subject?: string;
+  copyToRequester?: boolean;
 };
 
-async function sendPlatformNotification({ name, email, inquiryType, message }: PlatformNotification) {
+async function sendPlatformNotification({ name, email, inquiryType, message, subject, copyToRequester }: PlatformNotification) {
   try {
     const response = await fetch("/api/contact", {
       method: "POST",
@@ -109,7 +130,9 @@ async function sendPlatformNotification({ name, email, inquiryType, message }: P
         email,
         clientType: "個人",
         inquiryType,
-        message
+        message,
+        subject,
+        copyToRequester
       })
     });
 
@@ -121,6 +144,15 @@ async function sendPlatformNotification({ name, email, inquiryType, message }: P
 
 const initialAvailabilitySlots: TutorAvailabilitySlot[] = [];
 const sampleAvailabilitySlotIds = new Set(["AV-1001", "AV-1002", "AV-1003", "AV-1004", "AV-1005", "AV-1006", "AV-1007", "AV-1008"]);
+const initialStudentProfiles: StudentProfile[] = [
+  {
+    studentId: "STU-2201",
+    name: demoCustomer.name,
+    email: demoCustomer.email,
+    provider: "email",
+    createdAt: "2026-07-20T10:00:00+09:00"
+  }
+];
 
 const initialBookingForm: BookingFormState = {
   name: "",
@@ -141,9 +173,28 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     const saved = window.localStorage.getItem(storageKey);
     return saved === "en" || saved === "zh-Hant" || saved === "ja" ? saved : "ja";
   });
-  const [bookings, setBookings] = useState<BookingRecord[]>(demoBookings);
+  const [bookings, setBookingsBase] = useState<BookingRecord[]>(() => {
+    const saved = window.localStorage.getItem(bookingsStorageKey);
+    if (!saved) return demoBookings;
+    try {
+      const parsed = JSON.parse(saved) as BookingRecord[];
+      return Array.isArray(parsed) ? parsed : demoBookings;
+    } catch {
+      return demoBookings;
+    }
+  });
   const [customer] = useState<CustomerRecord>(demoCustomer);
   const [studentEmail, setStudentEmail] = useState(() => window.localStorage.getItem(studentEmailKey) ?? "");
+  const [studentProfiles, setStudentProfilesBase] = useState<StudentProfile[]>(() => {
+    const saved = window.localStorage.getItem(studentProfilesStorageKey);
+    if (!saved) return initialStudentProfiles;
+    try {
+      const parsed = JSON.parse(saved) as StudentProfile[];
+      return Array.isArray(parsed) ? parsed : initialStudentProfiles;
+    } catch {
+      return initialStudentProfiles;
+    }
+  });
   const [bookingForm, setBookingForm] = useState<BookingFormState>(initialBookingForm);
   const [bookingMessage, setBookingMessage] = useState("");
   const [blockedStudents, setBlockedStudents] = useState<string[]>(initialBlockedStudents);
@@ -166,6 +217,35 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   const mode = getMode(route.path);
   const selectedProduct = lessonProducts.find((product) => route.path.endsWith(product.kind)) ?? lessonProducts[0];
+  const supabaseAvailable = isSupabaseConfigured();
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    let mounted = true;
+
+    const applyUser = async (user: SupabaseUserLike | null) => {
+      if (!mounted || !user?.email) return;
+      const profile = await ensureSupabaseStudentProfile(user, studentProfiles);
+      if (!mounted) return;
+      if (!studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
+        setStudentProfiles([...studentProfiles, profile]);
+      }
+      setStudentEmail(profile.email);
+      setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
+      window.localStorage.setItem(studentEmailKey, profile.email);
+    };
+
+    supabase.auth.getUser().then(({ data }) => applyUser(data.user));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      void applyUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      data.subscription.unsubscribe();
+    };
+  }, [studentProfiles]);
 
   const handleLanguageChange = (nextLanguage: PlatformLanguage) => {
     setLanguage(nextLanguage);
@@ -177,14 +257,29 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     window.localStorage.setItem(availabilityStorageKey, JSON.stringify(slots));
   };
 
+  const setBookings = (nextBookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => {
+    setBookingsBase((current) => {
+      const resolved = typeof nextBookings === "function" ? nextBookings(current) : nextBookings;
+      window.localStorage.setItem(bookingsStorageKey, JSON.stringify(resolved));
+      return resolved;
+    });
+  };
+
+  const setStudentProfiles = (profiles: StudentProfile[]) => {
+    setStudentProfilesBase(profiles);
+    window.localStorage.setItem(studentProfilesStorageKey, JSON.stringify(profiles));
+  };
+
   const submitBooking = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const studentCopy = getStudentPageCopy(language);
     const emailForRequest = (bookingForm.email || studentEmail).trim().toLowerCase();
     const nameForRequest = bookingForm.name.trim();
-    const lessonKind = getBookingLessonKind(bookingForm);
+    const requestedLessonKind = getBookingLessonKind(bookingForm);
+    const bookableLessonKinds = getBookableLessonKinds(emailForRequest, customer);
+    const lessonKind = bookableLessonKinds.includes(requestedLessonKind) ? requestedLessonKind : bookableLessonKinds[0] ?? requestedLessonKind;
     const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForRequest);
-    const menus = getLessonMenus(lessonKind);
+    const menus = getEligibleBookingMenus(lessonKind, emailForRequest, customer);
     const menu = menus.find((item) => item.id === bookingForm.lessonMenuId) ?? menus[0];
     const requestedSlots = bookingForm.requestedSlots.filter((slot) => !isAvailabilitySlotBooked(slot, bookings));
 
@@ -212,8 +307,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         `${menu.name} / ${slot.deliveryMode === "online" ? "オンライン" : "対面"}`,
         `${getSlotDurationMinutes(slot)}分`,
         requestGroupLabel,
-        `候補枠: ${formatAvailabilityRange(slot)}`,
-        bookingForm.purpose ? `目的: ${bookingForm.purpose}` : "目的・相談内容: 未記入"
+        `候補枠: ${formatAvailabilityRange(slot)}`
       ].join(" / "),
       approvalGate: "tutor",
       creditAction: "hold"
@@ -234,15 +328,13 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         "",
         "候補枠:",
         ...requestedSlots.map((slot) => `- ${formatAvailabilityRange(slot)} / ${slot.deliveryMode === "online" ? "オンライン" : "対面"} / ${slot.timezone}`),
-        "",
-        `目的・相談内容: ${bookingForm.purpose || "未記入"}`
       ].join("\n")
     });
 
     setBookings((current) => [...nextBookings, ...current]);
     setStudentEmail(emailForRequest);
     window.localStorage.setItem(studentEmailKey, emailForRequest);
-    setBookingForm({ ...initialBookingForm, name: nameForRequest, email: emailForRequest, lessonMenuId: lessonKind === "japanese" ? "jp-trial" : "en-trial" });
+    setBookingForm({ ...initialBookingForm, name: nameForRequest, email: emailForRequest, lessonMenuId: menu.id });
     setChangeRequest((current) => ({ ...current, bookingId: nextBookings[0].id }));
     setBookingMessage(
       notificationSent
@@ -340,6 +432,10 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
             />
           ) : mode === "tutor" ? (
             <TutorAvailabilityPage
+              bookings={bookings}
+              setBookings={setBookings}
+              customer={customer}
+              studentProfiles={studentProfiles}
               studentEmail={studentEmail}
               setStudentEmail={setStudentEmail}
               availabilitySlots={availabilitySlots}
@@ -361,6 +457,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               language={language}
               bookings={bookings}
               customer={customer}
+              studentProfiles={studentProfiles}
+              setStudentProfiles={setStudentProfiles}
               studentEmail={studentEmail}
               setStudentEmail={setStudentEmail}
               blockedStudents={blockedStudents}
@@ -373,6 +471,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               submitChangeRequest={submitChangeRequest}
               bookingMessage={bookingMessage}
               availabilitySlots={availabilitySlots}
+              supabaseAvailable={supabaseAvailable}
             />
           )}
         </div>
@@ -385,7 +484,7 @@ function PlatformNav({ route, activePath }: { route: Route; activePath: string }
   const links = [
     { href: "/learning", label: "Summary" },
     { href: "/learning/japanese", label: "Japanese" },
-    { href: "/learning/english", label: "English Pronunciation" },
+    { href: "/learning/english", label: "英語発音コーチング" },
     { href: "/platform", label: "Student Page" },
     { href: "/learning/reviews", label: "Lesson Review" }
   ];
@@ -705,7 +804,7 @@ function LessonMenuGrid({
                   <strong>
                     <MenuTitle title={menu.display.name} />
                   </strong>
-                  <p>{menu.display.description}</p>
+                  {menu.display.description ? <p>{menu.display.description}</p> : null}
                   <p className="price-preview">
                     <span>{text.online}: {formatUnitPrice(menu)}</span>
                     <span>{text.inPerson}: {formatUnitPrice(menu, 1.8)}</span>
@@ -892,6 +991,7 @@ function PurchaseDialog({
 
 function BookingRequestCard({
   language,
+  customer,
   studentEmail,
   blockedStudents,
   bookingForm,
@@ -900,6 +1000,7 @@ function BookingRequestCard({
   bookingMessage
 }: {
   language: PlatformLanguage;
+  customer: CustomerRecord;
   studentEmail: string;
   blockedStudents: string[];
   bookingForm: BookingFormState;
@@ -908,13 +1009,16 @@ function BookingRequestCard({
   bookingMessage: string;
 }) {
   const lessonKind = getBookingLessonKind(bookingForm);
-  const menus = getLessonMenus(lessonKind);
-  const selectedMenu = menus.find((menu) => menu.id === bookingForm.lessonMenuId) ?? menus[0];
   const currentEmail = (bookingForm.email || studentEmail).trim().toLowerCase();
+  const bookableLessonKinds = getBookableLessonKinds(currentEmail, customer);
+  const activeLessonKind = bookableLessonKinds.includes(lessonKind) ? lessonKind : bookableLessonKinds[0];
+  const menus = activeLessonKind ? getEligibleBookingMenus(activeLessonKind, currentEmail, customer) : [];
+  const selectedMenu = menus.find((menu) => menu.id === bookingForm.lessonMenuId) ?? menus[0];
   const isBlocked = blockedStudents.includes(currentEmail);
   const selectedSlots = bookingForm.requestedSlots;
   const text = getStudentPageCopy(language);
   const selectedDeliveryLabel = summarizeDeliveryModes(selectedSlots, language);
+  const canRequestBooking = !isBlocked && selectedSlots.length > 0 && menus.length > 0;
 
   return (
     <form className="platform-card platform-form" id="booking-request" onSubmit={submitBooking}>
@@ -936,10 +1040,12 @@ function BookingRequestCard({
         <label>
           {text.lessonKind}
           <select
-            value={lessonKind}
+            value={activeLessonKind ?? ""}
+            disabled={bookableLessonKinds.length === 0}
             onChange={(event) => {
               const nextKind = event.target.value as LessonKind;
-              const nextMenu = getLessonMenus(nextKind)[0];
+              const nextMenu = getEligibleBookingMenus(nextKind, currentEmail, customer)[0];
+              if (!nextMenu) return;
               setBookingForm({
                 ...bookingForm,
                 lessonMenuId: nextMenu.id,
@@ -948,16 +1054,22 @@ function BookingRequestCard({
               });
             }}
           >
-            <option value="japanese">{text.japaneseLesson}</option>
-            <option value="english">{text.englishLesson}</option>
+            {bookableLessonKinds.length === 0 ? <option value="">{text.noPurchasedPackage}</option> : null}
+            {bookableLessonKinds.map((kind) => (
+              <option key={kind} value={kind}>
+                {formatLessonKind(kind, language)}
+              </option>
+            ))}
           </select>
         </label>
         <label>
           {text.lessonMenu}
           <select
-            value={selectedMenu.id}
+            value={selectedMenu?.id ?? ""}
+            disabled={menus.length === 0}
             onChange={(event) => {
               const nextMenu = menus.find((menu) => menu.id === event.target.value) ?? menus[0];
+              if (!nextMenu) return;
               setBookingForm({
                 ...bookingForm,
                 lessonMenuId: nextMenu.id,
@@ -966,6 +1078,7 @@ function BookingRequestCard({
               });
             }}
           >
+            {menus.length === 0 ? <option value="">{text.noPurchasedPackage}</option> : null}
             {menus.map((menu) => (
               <option key={menu.id} value={menu.id}>
                 {getMenuText(menu, language).category}：{getMenuText(menu, language).name}
@@ -974,6 +1087,7 @@ function BookingRequestCard({
           </select>
         </label>
       </div>
+      <p className="platform-note">{menus.length > 0 ? text.bookableMenuNote : text.noPurchasedPackageLead}</p>
       <p className="platform-note">{text.deliveryNote}</p>
       <div className="platform-grid two">
         <label>
@@ -1001,11 +1115,7 @@ function BookingRequestCard({
         {text.recurringRequest}
       </label>
       <p className="platform-note">{text.recurringNote}</p>
-      <label>
-        {text.purpose}
-        <textarea value={bookingForm.purpose} rows={5} onChange={(event) => setBookingForm({ ...bookingForm, purpose: event.target.value })} />
-      </label>
-      <button className="button primary" type="submit" disabled={isBlocked || selectedSlots.length === 0}>
+      <button className="button primary" type="submit" disabled={!canRequestBooking}>
         {text.bookingRequestTitle}
       </button>
     </form>
@@ -1171,6 +1281,10 @@ function ReviewCard({ review }: { review: LessonReview }) {
 }
 
 function TutorAvailabilityPage({
+  bookings,
+  setBookings,
+  customer,
+  studentProfiles,
   studentEmail,
   setStudentEmail,
   availabilitySlots,
@@ -1178,6 +1292,10 @@ function TutorAvailabilityPage({
   reviews,
   setReviews
 }: {
+  bookings: BookingRecord[];
+  setBookings: (bookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => void;
+  customer: CustomerRecord;
+  studentProfiles: StudentProfile[];
   studentEmail: string;
   setStudentEmail: (email: string) => void;
   availabilitySlots: TutorAvailabilitySlot[];
@@ -1187,6 +1305,8 @@ function TutorAvailabilityPage({
 }) {
   const [loginEmail, setLoginEmail] = useState(studentEmail);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
+  const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
+  const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
   const [form, setForm] = useState({
     start: "",
     durationMinutes: 50,
@@ -1216,6 +1336,8 @@ function TutorAvailabilityPage({
   });
   const isOwner = studentEmail.toLowerCase() === ownerEmail;
   const pendingReviews = reviews.filter((review) => review.status === "pending");
+  const pendingBookings = bookings.filter((booking) => booking.status === "requested");
+  const studentPackageSummaries = buildStudentPackageSummaries(bookings, customer, studentProfiles);
 
   const handleLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1283,6 +1405,81 @@ function TutorAvailabilityPage({
     )));
   };
 
+  const approveBooking = async (bookingId: string) => {
+    const booking = bookings.find((item) => item.id === bookingId);
+    if (!booking) return;
+    const conflicts = findOverlappingBookings(booking, bookings);
+    const nextBookings = bookings.map((item) => (
+      item.id === bookingId
+        ? { ...item, status: "approved" as BookingStatus, approvalGate: "none" as const, creditAction: "consumed" as const }
+        : item
+    ));
+    setBookings(nextBookings);
+
+    await sendPlatformNotification({
+      name: booking.student,
+      email: booking.studentEmail,
+      inquiryType: "Learning予約完了通知",
+      subject: "レッスン予約が確定しました",
+      copyToRequester: true,
+      message: [
+        "レッスン予約が確定しました。",
+        "",
+        `予約ID: ${booking.id}`,
+        `生徒名: ${booking.student}`,
+        `メールアドレス: ${booking.studentEmail}`,
+        `レッスン種別: ${formatLessonKind(booking.lessonKind, "ja")}`,
+        `日時: ${formatDateTime(booking.requestedSlot)} (${booking.timezone})`,
+        "",
+        "当日は予定時刻にご参加ください。"
+      ].join("\n")
+    });
+
+    if (conflicts.length > 0) {
+      await sendPlatformNotification({
+        name: "Schedule overlap monitor",
+        email: ownerEmail,
+        inquiryType: "Learning予約枠重複アラート",
+        subject: "予約枠の重複を検知しました",
+        message: [
+          "予約承認時に、同一時間帯の予約重複を検知しました。",
+          "",
+          `承認した予約ID: ${booking.id}`,
+          `日時: ${formatDateTime(booking.requestedSlot)} (${booking.timezone})`,
+          "",
+          "重複候補:",
+          ...conflicts.map((item) => `- ${item.id} / ${item.student} / ${formatDateTime(item.requestedSlot)}`)
+        ].join("\n")
+      });
+    }
+  };
+
+  const rejectBooking = async (bookingId: string) => {
+    const booking = bookings.find((item) => item.id === bookingId);
+    if (!booking) return;
+    setBookings(bookings.map((item) => (
+      item.id === bookingId
+        ? { ...item, status: "cancelled" as BookingStatus, approvalGate: "none" as const, creditAction: "restored" as const }
+        : item
+    )));
+
+    await sendPlatformNotification({
+      name: booking.student,
+      email: booking.studentEmail,
+      inquiryType: "Learning予約リクエスト確認結果",
+      subject: "レッスン予約リクエストについて",
+      copyToRequester: true,
+      message: [
+        "お送りいただいたレッスン予約リクエストについて、今回は日程確定を見送らせていただきました。",
+        "",
+        `予約ID: ${booking.id}`,
+        `日時: ${formatDateTime(booking.requestedSlot)} (${booking.timezone})`,
+        "",
+        "別の候補枠で再度リクエストをお願いいたします。"
+      ].join("\n")
+    });
+  };
+
   if (!isOwner) {
     return (
       <form className="platform-card platform-form login-card" onSubmit={handleLogin}>
@@ -1291,7 +1488,7 @@ function TutorAvailabilityPage({
         <p>講師の空き枠を設定するための専用画面です。運営者メールアドレスで確認できます。</p>
         <label>
           講師メールアドレス
-          <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={ownerEmail} required />
+          <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={tutorLoginPlaceholder} required />
         </label>
         <button className="button primary" type="submit">
           講師画面を開く
@@ -1306,12 +1503,62 @@ function TutorAvailabilityPage({
       <div className="platform-band">
         <div>
           <p className="eyebrow">Tutor Availability</p>
-          <h2>講師空き時間設定</h2>
-          <p>Student画面に表示する空き枠を追加・削除できます。ここで追加した枠は予約確定ではなく、予約リクエストの候補として表示されます。</p>
+          <h2>講師管理画面</h2>
+          <p>空き枠、予約リクエスト、受講者ごとのパッケージ状況を確認できます。</p>
         </div>
         <div className="student-session">
           <p className="platform-badge">{studentEmail}</p>
         </div>
+      </div>
+
+      <section className="platform-card">
+        <h3>予約リクエスト管理</h3>
+        <p className="platform-muted">生徒から送信された予約リクエストを確認し、承認または見送りを選択できます。承認時は生徒と講師へメール通知を送信します。</p>
+        <div className="record-list">
+          {pendingBookings.length > 0 ? pendingBookings.map((booking) => (
+            <article key={booking.id}>
+              <strong>{booking.id} / {booking.student}</strong>
+              <span>{formatLessonKind(booking.lessonKind, "ja")} / {formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
+              {booking.reason ? <p>{booking.reason}</p> : null}
+              <div className="button-row">
+                <button className="button primary" type="button" onClick={() => approveBooking(booking.id)}>
+                  承認して予約確定
+                </button>
+                <button className="button secondary" type="button" onClick={() => rejectBooking(booking.id)}>
+                  見送る
+                </button>
+              </div>
+            </article>
+          )) : <p className="platform-muted">確認待ちの予約リクエストはありません。</p>}
+        </div>
+      </section>
+
+      <div className="platform-grid two">
+        <section className="platform-card">
+          <h3>予約カレンダー</h3>
+          <p className="platform-muted">予約済み・リクエスト中の枠をクリックすると、受講者とパッケージ消化状況を確認できます。</p>
+          <BookingCalendar
+            month={bookingCalendarMonth}
+            setMonth={setBookingCalendarMonth}
+            bookings={bookings.filter((booking) => booking.status !== "cancelled")}
+            onSelectBooking={setSelectedTutorBooking}
+            language="ja"
+          />
+        </section>
+
+        <section className="platform-card" id="student-package-summary">
+          <h3>生徒別パッケージ一覧</h3>
+          <div className="record-list">
+            {studentPackageSummaries.map((summary) => (
+              <article key={summary.email}>
+                <strong>{summary.name} / {summary.email}</strong>
+                <span>StudentID: {summary.studentId}</span>
+                <p>購入済: {summary.purchased}回 / 予約済: {summary.reserved}回 / 完了済: {summary.completed}回 / 未予約: {summary.unbooked}回</p>
+                <p>購入: {summary.packageLabel} / {formatDateTime(summary.purchasedAt)}</p>
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
 
       <section className="platform-card platform-form">
@@ -1444,6 +1691,26 @@ function TutorAvailabilityPage({
           )) : <p className="platform-muted">確認待ちのレビューはありません。</p>}
         </div>
       </section>
+
+      {selectedTutorBooking ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="予約詳細">
+          <div className="modal-panel">
+            <button className="modal-close" type="button" onClick={() => setSelectedTutorBooking(null)} aria-label="閉じる">×</button>
+            <p className="eyebrow">Booking Detail</p>
+            <h3>{selectedTutorBooking.id} / {selectedTutorBooking.student}</h3>
+            <p>{formatLessonKind(selectedTutorBooking.lessonKind, "ja")} / {formatDateTime(selectedTutorBooking.requestedSlot)} ({selectedTutorBooking.timezone})</p>
+            <p>ステータス: <StatusBadge status={selectedTutorBooking.status} language="ja" /></p>
+            <p>メール: {selectedTutorBooking.studentEmail}</p>
+            <p>{formatPackageProgressForBooking(selectedTutorBooking, bookings, customer)}</p>
+            <button className="button secondary" type="button" onClick={() => {
+              document.getElementById("student-package-summary")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setSelectedTutorBooking(null);
+            }}>
+              生徒別パッケージ一覧へ
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1452,6 +1719,8 @@ function StudentDashboard({
   language,
   bookings,
   customer,
+  studentProfiles,
+  setStudentProfiles,
   availabilitySlots,
   studentEmail,
   setStudentEmail,
@@ -1463,11 +1732,14 @@ function StudentDashboard({
   changeRequest,
   setChangeRequest,
   submitChangeRequest,
-  bookingMessage
+  bookingMessage,
+  supabaseAvailable
 }: {
   language: PlatformLanguage;
   bookings: BookingRecord[];
   customer: CustomerRecord;
+  studentProfiles: StudentProfile[];
+  setStudentProfiles: (profiles: StudentProfile[]) => void;
   availabilitySlots: TutorAvailabilitySlot[];
   studentEmail: string;
   setStudentEmail: (email: string) => void;
@@ -1480,8 +1752,13 @@ function StudentDashboard({
   setChangeRequest: (request: RequestChange) => void;
   submitChangeRequest: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   bookingMessage: string;
+  supabaseAvailable: boolean;
 }) {
   const [loginEmail, setLoginEmail] = useState(studentEmail);
+  const [loginName, setLoginName] = useState("");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authProvider, setAuthProvider] = useState<StudentProfile["provider"]>("email");
+  const [authMessage, setAuthMessage] = useState("");
   const [blockEmail, setBlockEmail] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
@@ -1498,27 +1775,110 @@ function StudentDashboard({
         name: visibleBookings[0]?.student ?? "Guest student",
         email: normalizedEmail,
         packageRemaining: visibleBookings.filter((booking) => booking.status === "approved").length,
+        lessonCredits: [],
         renewalDue: "未設定"
       };
+
+  const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
+  const packageSummary = buildStudentPackageSummary(activeCustomer.email, bookings, activeCustomer, activeProfile?.studentId);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextEmail = loginEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
-    setStudentEmail(nextEmail);
-    setBookingForm({ ...bookingForm, email: nextEmail });
-    window.localStorage.setItem(studentEmailKey, nextEmail);
-    await sendPlatformNotification({
-      name: "Student dashboard login",
-      email: nextEmail,
-      inquiryType: "Learning生徒ログイン登録",
-      message: [
-        "Learningページで生徒ダッシュボードへのログイン登録がありました。",
-        "",
-        `登録メールアドレス: ${nextEmail}`,
-        `登録日時: ${new Date().toISOString()}`
-      ].join("\n")
-    });
+
+    if (supabaseAvailable) {
+      const supabase = getSupabaseClient();
+      if (!supabase) return;
+
+      if (authProvider === "google") {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: `${window.location.origin}/platform`
+          }
+        });
+        if (error) setAuthMessage(error.message);
+        return;
+      }
+
+      if (authMode === "signup") {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
+        const { error } = await supabase.auth.signInWithOtp({
+          email: nextEmail,
+          options: {
+            shouldCreateUser: true,
+            emailRedirectTo: `${window.location.origin}/platform`,
+            data: {
+              name: loginName.trim() || nextEmail.split("@")[0],
+              provider: authProvider
+            }
+          }
+        });
+        setAuthMessage(error ? error.message : "サインアップ用リンクをメールで送信しました。メールをご確認ください。");
+        return;
+      }
+
+      const response = await fetch("/api/student-auth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          identifier: loginEmail.trim(),
+          redirectTo: `${window.location.origin}/platform`
+        })
+      });
+      setAuthMessage(response.ok ? "サインイン用リンクをメールで送信しました。メールをご確認ください。" : "StudentIDまたはメールアドレスを確認してください。");
+      return;
+    }
+
+    if (authMode === "signup") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
+      const existingProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === nextEmail);
+      const profile = existingProfile ?? {
+        studentId: generateStudentId(studentProfiles),
+        name: loginName.trim() || nextEmail.split("@")[0],
+        email: nextEmail,
+        provider: authProvider,
+        createdAt: new Date().toISOString()
+      };
+      if (!existingProfile) {
+        setStudentProfiles([...studentProfiles, profile]);
+      }
+      setStudentEmail(nextEmail);
+      setBookingForm({ ...bookingForm, email: nextEmail, name: profile.name });
+      window.localStorage.setItem(studentEmailKey, nextEmail);
+      setAuthMessage(`StudentID: ${profile.studentId}`);
+      await sendPlatformNotification({
+        name: profile.name,
+        email: nextEmail,
+        inquiryType: "Learning生徒サインアップ",
+        subject: "Learning生徒サインアップがありました",
+        message: [
+          "Learningページで生徒サインアップがありました。",
+          "",
+          `StudentID: ${profile.studentId}`,
+          `登録メールアドレス: ${nextEmail}`,
+          `サインアップ方法: ${formatAuthProvider(authProvider)}`,
+          `登録日時: ${profile.createdAt}`
+        ].join("\n")
+      });
+      return;
+    }
+
+    const identifier = loginEmail.trim().toLowerCase();
+    const profile = studentProfiles.find((item) => (
+      item.email.toLowerCase() === identifier || item.studentId.toLowerCase() === identifier
+    ));
+    if (!profile) {
+      setAuthMessage("StudentIDまたはメールアドレスを確認してください。");
+      return;
+    }
+    setStudentEmail(profile.email);
+    setBookingForm({ ...bookingForm, email: profile.email, name: profile.name });
+    window.localStorage.setItem(studentEmailKey, profile.email);
+    setAuthMessage("");
   };
 
   const toggleAvailabilitySlot = (slot: TutorAvailabilitySlot) => {
@@ -1545,12 +1905,35 @@ function StudentDashboard({
           <p className="eyebrow">Student</p>
           <h2>{text.loginTitle}</h2>
           <p>{text.loginLead}</p>
+          <p className="platform-note">{supabaseAvailable ? text.secureAuthEnabled : text.localAuthFallback}</p>
+          <div className="segmented-control" aria-label="Sign in or sign up">
+            <button className={authMode === "signin" ? "active" : ""} type="button" onClick={() => setAuthMode("signin")}>
+              {text.signIn}
+            </button>
+            <button className={authMode === "signup" ? "active" : ""} type="button" onClick={() => setAuthMode("signup")}>
+              {text.signUp}
+            </button>
+          </div>
+          <div className="platform-grid three">
+            {(["google", "email"] as StudentProfile["provider"][]).map((provider) => (
+              <button key={provider} className={`button secondary ${authProvider === provider ? "active" : ""}`} type="button" onClick={() => setAuthProvider(provider)}>
+                {formatAuthProvider(provider)}
+              </button>
+            ))}
+          </div>
+          {authMode === "signup" ? (
+            <label>
+              {text.name}
+              <input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="Mika Chen" />
+            </label>
+          ) : null}
           <label>
-            {text.registeredEmail}
-            <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="mika@example.com" required />
+            {authMode === "signup" ? text.registeredEmail : text.signInIdentifier}
+            <input type={authMode === "signup" ? "email" : "text"} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={authMode === "signup" ? "mika@example.com" : "STU-2201 / mika@example.com"} required />
           </label>
+          {authMessage ? <p className={authMessage.startsWith("StudentID") ? "form-success" : "form-error"}>{authMessage}</p> : null}
           <button className="button primary" type="submit">
-            {text.loginButton}
+            {authMode === "signup" ? text.signUpButton : text.loginButton}
           </button>
         </form>
       </div>
@@ -1577,13 +1960,41 @@ function StudentDashboard({
       </div>
 
       <div className="platform-grid three">
-        <KpiCard label={text.remainingLessons} value={text.lessonCount(activeCustomer.packageRemaining)} />
-        <KpiCard label={text.nextCheck} value={activeCustomer.renewalDue} />
+        <KpiCard label="StudentID" value={packageSummary.studentId} />
         <KpiCard label={text.customerStatus} value={formatCustomerStatus(activeCustomer.status, language)} />
+        <KpiCard label={text.completedLessons} value={text.lessonCount(packageSummary.completed)} />
       </div>
+      <div className="platform-grid three">
+        <KpiCard label={text.unbookedLessons} value={text.lessonCount(packageSummary.unbooked)} />
+        <KpiCard label={text.reservedLessons} value={text.lessonCount(packageSummary.reserved)} />
+        <KpiCard label={text.purchasedLessons} value={text.lessonCount(packageSummary.purchased)} />
+      </div>
+      {packageSummary.zoomLink ? (
+        <section className="platform-card lesson-link-card">
+          <div>
+            <p className="eyebrow">{text.lessonLinkTitle}</p>
+            <h3>{text.lessonLinkLead}</h3>
+          </div>
+          <a className="button secondary" href={packageSummary.zoomLink} target="_blank" rel="noreferrer">
+            {text.openLessonLink}
+          </a>
+        </section>
+      ) : null}
+
+      <section className="platform-card">
+        <h3>{text.bookingTimelineTitle}</h3>
+        {visibleBookings.length > 0 ? (
+          <div className="booking-tile-scroll" aria-label={text.bookingTimelineTitle}>
+            {visibleBookings.map((booking) => (
+              <BookingSummaryTile key={booking.id} booking={booking} language={language} onSelect={setSelectedBooking} />
+            ))}
+          </div>
+        ) : <p className="platform-muted">{text.noConfirmedBookings}</p>}
+      </section>
 
       <BookingRequestCard
         language={language}
+        customer={activeCustomer}
         studentEmail={studentEmail}
         blockedStudents={blockedStudents}
         bookingForm={bookingForm}
@@ -1657,27 +2068,18 @@ function StudentDashboard({
         </form>
       </div>
 
-      <section className="platform-card">
-        <h3>{text.bookingTimelineTitle}</h3>
-        <div className="record-list">
-          {visibleBookings.length > 0 ? visibleBookings.map((booking) => (
-            <article key={booking.id}>
-              <strong>{booking.id} / {formatLessonKind(booking.lessonKind, language)}</strong>
-              <span>{formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
-              <p>{text.statusLabel}: <StatusBadge status={booking.status} language={language} /></p>
-              {booking.reason ? <p>{text.detailLabel}: {booking.reason}</p> : null}
-              <p>{text.twelveHourLabel}: {isInsideTwelveHours(booking.requestedSlot) ? text.twelveHourClose : text.twelveHourOpen}</p>
-            </article>
-          )) : <p className="platform-muted">{text.noConfirmedBookings}</p>}
-        </div>
-      </section>
-
       {selectedBooking ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Lesson notes">
           <div className="modal-panel">
             <button className="modal-close" type="button" onClick={() => setSelectedBooking(null)} aria-label="閉じる">×</button>
-            <p className="eyebrow">Lesson Notes</p>
+            <p className="eyebrow">Booking Detail</p>
             <h3>{selectedBooking.id} / {formatDateTime(selectedBooking.requestedSlot)}</h3>
+            <p>{getBookingCourseName(selectedBooking)}</p>
+            {packageSummary.zoomLink ? (
+              <a className="button secondary" href={packageSummary.zoomLink} target="_blank" rel="noreferrer">
+                {text.openLessonLink}
+              </a>
+            ) : null}
             {isPastBooking(selectedBooking.requestedSlot) ? (
               <p>{selectedBooking.reason ?? text.noLessonNote}</p>
             ) : (
@@ -1719,9 +2121,9 @@ function BookingCalendar({
   return (
     <div className="booking-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>‹</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>?</button>
         <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>›</button>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>?</button>
       </div>
       <div className="calendar-weekdays">
         {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
@@ -1743,6 +2145,29 @@ function BookingCalendar({
         })}
       </div>
     </div>
+  );
+}
+
+function BookingSummaryTile({
+  booking,
+  language,
+  onSelect
+}: {
+  booking: BookingRecord;
+  language: PlatformLanguage;
+  onSelect: (booking: BookingRecord) => void;
+}) {
+  const text = getStudentPageCopy(language);
+  const courseName = getBookingCourseName(booking);
+
+  return (
+    <button className="booking-summary-tile" type="button" onClick={() => onSelect(booking)}>
+      <span className="booking-summary-date">{formatDateTime(booking.requestedSlot)}</span>
+      <strong>{courseName}</strong>
+      <span>{formatLessonKind(booking.lessonKind, language)}</span>
+      <span>{booking.timezone}</span>
+      <span>{text.statusLabel}: {formatBookingStatus(booking.status, language)}</span>
+    </button>
   );
 }
 
@@ -1777,9 +2202,9 @@ function AvailabilityCalendar({
   return (
     <div className="booking-calendar availability-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>‹</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>?</button>
         <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>›</button>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>?</button>
       </div>
       <div className="calendar-weekdays">
         {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
@@ -1915,6 +2340,153 @@ function formatDeliveryMode(mode: DeliveryMode, language: PlatformLanguage) {
   return labels[language][mode];
 }
 
+function formatAuthProvider(provider: StudentProfile["provider"]) {
+  const labels: Record<StudentProfile["provider"], string> = {
+    google: "Google",
+    email: "Email"
+  };
+  return labels[provider];
+}
+
+function mapSupabaseProvider(provider: unknown): StudentProfile["provider"] {
+  if (provider === "google") return "google";
+  return "email";
+}
+
+async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfiles: StudentProfile[]) {
+  const supabase = getSupabaseClient();
+  const email = user.email?.toLowerCase() ?? "";
+  const provider = mapSupabaseProvider(user.app_metadata?.provider);
+  const fallbackName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : email.split("@")[0];
+  const localProfile = localProfiles.find((profile) => profile.email.toLowerCase() === email);
+
+  if (!supabase || !email) {
+    return localProfile ?? {
+      studentId: generateStudentId(localProfiles),
+      name: fallbackName,
+      email,
+      provider,
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  const { data: existing } = await supabase
+    .from("students")
+    .select("student_id,name,email,provider,created_at")
+    .or(`auth_user_id.eq.${user.id},email.eq.${email}`)
+    .maybeSingle();
+
+  if (existing?.email && existing?.student_id) {
+    return {
+      studentId: String(existing.student_id),
+      name: String(existing.name || fallbackName),
+      email: String(existing.email).toLowerCase(),
+      provider: mapSupabaseProvider(existing.provider),
+      createdAt: String(existing.created_at || new Date().toISOString())
+    };
+  }
+
+  const nextProfile: StudentProfile = {
+    studentId: localProfile?.studentId ?? generateStudentId(localProfiles),
+    name: localProfile?.name ?? fallbackName,
+    email,
+    provider,
+    createdAt: new Date().toISOString()
+  };
+
+  const { data: inserted, error } = await supabase
+    .from("students")
+    .insert({
+      auth_user_id: user.id,
+      student_id: nextProfile.studentId,
+      email: nextProfile.email,
+      name: nextProfile.name,
+      provider: nextProfile.provider
+    })
+    .select("student_id,name,email,provider,created_at")
+    .single();
+
+  if (!error && inserted?.email && inserted?.student_id) {
+    return {
+      studentId: String(inserted.student_id),
+      name: String(inserted.name || nextProfile.name),
+      email: String(inserted.email).toLowerCase(),
+      provider: mapSupabaseProvider(inserted.provider),
+      createdAt: String(inserted.created_at || nextProfile.createdAt)
+    };
+  }
+
+  return nextProfile;
+}
+
+function generateStudentId(profiles: StudentProfile[]) {
+  let id = "";
+  do {
+    id = `STU-${Math.floor(100000 + Math.random() * 900000)}`;
+  } while (profiles.some((profile) => profile.studentId === id));
+  return id;
+}
+
+function buildStudentPackageSummary(email: string, bookings: BookingRecord[], customer: CustomerRecord, studentId?: string) {
+  const credits = getStudentLessonCredits(email, customer);
+  const purchased = credits.reduce((total, credit) => total + credit.purchasedLessons, 0);
+  const completed = bookings.filter((booking) => booking.studentEmail.toLowerCase() === email.toLowerCase() && booking.status === "approved" && isPastBooking(booking.requestedSlot)).length;
+  const reserved = bookings.filter((booking) => booking.studentEmail.toLowerCase() === email.toLowerCase() && booking.status === "approved" && !isPastBooking(booking.requestedSlot)).length;
+  const unbooked = Math.max(0, purchased - completed - reserved);
+  const primaryCredit = credits[0];
+
+  return {
+    email,
+    name: customer.email.toLowerCase() === email.toLowerCase() ? customer.name : email,
+    studentId: studentId ?? "未発行",
+    purchased,
+    reserved,
+    completed,
+    unbooked,
+    packageLabel: primaryCredit?.packageLabel ?? "未登録",
+    purchasedAt: primaryCredit?.purchasedAt ?? "",
+    zoomLink: primaryCredit?.zoomLink ?? ""
+  };
+}
+
+function buildStudentPackageSummaries(bookings: BookingRecord[], customer: CustomerRecord, profiles: StudentProfile[]) {
+  const emails = Array.from(new Set([customer.email, ...bookings.map((booking) => booking.studentEmail.toLowerCase())]));
+  return emails.map((email) => {
+    const profile = profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
+    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId);
+  });
+}
+
+function getBookingSequenceNumber(booking: BookingRecord, bookings: BookingRecord[]) {
+  const sameStudentBookings = bookings
+    .filter((item) => item.studentEmail.toLowerCase() === booking.studentEmail.toLowerCase() && item.lessonKind === booking.lessonKind && item.status === "approved")
+    .sort((a, b) => new Date(a.requestedSlot).getTime() - new Date(b.requestedSlot).getTime());
+  const index = sameStudentBookings.findIndex((item) => item.id === booking.id);
+  return index >= 0 ? index + 1 : sameStudentBookings.length + 1;
+}
+
+function formatPackageProgressForBooking(booking: BookingRecord, bookings: BookingRecord[], customer: CustomerRecord) {
+  const credits = getStudentLessonCredits(booking.studentEmail, customer).filter((credit) => credit.lessonKind === booking.lessonKind);
+  const purchased = credits.reduce((total, credit) => total + credit.purchasedLessons, 0);
+  if (purchased === 0) return "購入パッケージ情報は未登録です。";
+  return `購入パッケージ総数 ${purchased}回中 ${getBookingSequenceNumber(booking, bookings)}回目`;
+}
+
+function getBookingCourseName(booking: BookingRecord) {
+  const firstDetail = booking.reason?.split(" / ")[0]?.trim();
+  return firstDetail || formatLessonKind(booking.lessonKind, "ja");
+}
+
+function findOverlappingBookings(target: BookingRecord, bookings: BookingRecord[]) {
+  const targetTime = new Date(target.requestedSlot).getTime();
+  if (Number.isNaN(targetTime)) return [];
+  return bookings.filter((booking) => {
+    if (booking.id === target.id || booking.status !== "approved") return false;
+    const bookingTime = new Date(booking.requestedSlot).getTime();
+    return !Number.isNaN(bookingTime) && bookingTime === targetTime;
+  });
+}
+
 function formatCalendarMonth(year: number, monthIndex: number, language: PlatformLanguage) {
   if (language === "en") return `${new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(year, monthIndex, 1))} ${year}`;
   if (language === "zh-Hant") return `${year}年${monthIndex + 1}月`;
@@ -1936,11 +2508,24 @@ function getStudentPageCopy(language: PlatformLanguage) {
       loginTitle: "受講者ダッシュボード",
       loginLead: "登録メールアドレスを入力すると、そのメールアドレスに紐づく予約状況を確認できます。",
       registeredEmail: "登録メールアドレス",
+      signInIdentifier: "StudentID または メールアドレス",
+      signIn: "サインイン",
+      signUp: "サインアップ",
       loginButton: "確認する",
+      signUpButton: "StudentIDを発行する",
+      secureAuthEnabled: "安全な認証サービスに接続されています。",
+      localAuthFallback: "現在は確認用のローカルログインです。Supabase設定後に安全な認証へ切り替わります。",
       dashboardTitle: "予約状況、パッケージ、学習履歴",
       dashboardLead: "予約希望、確定済みの予約、パッケージ状況を確認できます。日程については内容確認後にメールでご案内します。",
       switchButton: "切り替え",
       remainingLessons: "残レッスン",
+      purchasedLessons: "購入済",
+      reservedLessons: "予約済",
+      completedLessons: "完了済",
+      unbookedLessons: "未予約",
+      lessonLinkTitle: "Lesson Link",
+      lessonLinkLead: "受講用リンク",
+      openLessonLink: "レッスンリンクを開く",
       nextCheck: "次回確認目安",
       customerStatus: "受講状況",
       lessonCount: (count: number) => `${count}回`,
@@ -1956,6 +2541,9 @@ function getStudentPageCopy(language: PlatformLanguage) {
       japaneseLesson: "1on1日本語レッスン",
       englishLesson: "英語発音コーチング",
       lessonMenu: "レッスンメニュー",
+      bookableMenuNote: "購入済みパッケージ、および同価格のコースのみ選択できます。",
+      noPurchasedPackage: "購入済みパッケージがありません",
+      noPurchasedPackageLead: "予約リクエストには、先にレッスンパッケージの購入希望を送信してください。",
       deliveryNote: "実施方法は、選択した講師空き枠に合わせて自動反映されます。対面枠は開催地の事前確認が必要です。",
       selectedSlots: "選択中の候補枠",
       selectedSlotPlaceholder: "講師空き時間カレンダーから候補枠を選択してください。",
@@ -1997,11 +2585,24 @@ function getStudentPageCopy(language: PlatformLanguage) {
       loginTitle: "Student Dashboard",
       loginLead: "Enter your registered email address to view booking information linked to that address.",
       registeredEmail: "Registered email address",
+      signInIdentifier: "StudentID or email address",
+      signIn: "Sign in",
+      signUp: "Sign up",
       loginButton: "Continue",
+      signUpButton: "Issue StudentID",
+      secureAuthEnabled: "Secure authentication is connected.",
+      localAuthFallback: "Local preview login is currently active. Secure authentication will be enabled after Supabase configuration.",
       dashboardTitle: "Bookings, Packages, and Lesson History",
       dashboardLead: "You can check booking requests, confirmed bookings, and package status. Schedule details will be shared by email after review.",
       switchButton: "Switch",
       remainingLessons: "Remaining lessons",
+      purchasedLessons: "Purchased",
+      reservedLessons: "Booked",
+      completedLessons: "Completed",
+      unbookedLessons: "Unbooked",
+      lessonLinkTitle: "Lesson Link",
+      lessonLinkLead: "Lesson access link",
+      openLessonLink: "Open lesson link",
       nextCheck: "Next check",
       customerStatus: "Lesson status",
       lessonCount: (count: number) => `${count} lesson${count === 1 ? "" : "s"}`,
@@ -2017,6 +2618,9 @@ function getStudentPageCopy(language: PlatformLanguage) {
       japaneseLesson: "1-on-1 Japanese Lesson",
       englishLesson: "English Pronunciation Coaching",
       lessonMenu: "Lesson menu",
+      bookableMenuNote: "Only purchased packages and courses at the same price are available here.",
+      noPurchasedPackage: "No purchased package",
+      noPurchasedPackageLead: "Please send a lesson package purchase request before submitting a booking request.",
       deliveryNote: "The delivery format is set automatically from the selected tutor availability slot. In-person lessons require location confirmation in advance.",
       selectedSlots: "Selected time slots",
       selectedSlotPlaceholder: "Please select a time slot from the tutor availability calendar.",
@@ -2056,18 +2660,31 @@ function getStudentPageCopy(language: PlatformLanguage) {
     },
     "zh-Hant": {
       loginTitle: "學生頁面",
-      loginLead: "輸入註冊電子郵件後，可查看與該信箱相關的預約資訊。",
+      loginLead: "輸入註冊電子郵件後，可?看與該信箱相關的預約資訊。",
       registeredEmail: "註冊電子郵件",
+      signInIdentifier: "StudentID 或電子郵件",
+      signIn: "登入",
+      signUp: "註冊",
       loginButton: "確認",
-      dashboardTitle: "預約、套裝課程與學習紀錄",
-      dashboardLead: "可確認預約申請、已確認的預約與課程套裝狀態。日程確認後會以電子郵件通知。",
+      signUpButton: "發行 StudentID",
+      secureAuthEnabled: "已連接安全認證服務。",
+      localAuthFallback: "目前使用本機預覽登入。完成 Supabase 設定後會切換為安全認證。",
+      dashboardTitle: "預約、套裝課程與學習紀?",
+      dashboardLead: "可確認預約申請、已確認的預約與課程套裝?態。日程確認後會以電子郵件通知。",
       switchButton: "切換",
       remainingLessons: "剩餘課程",
+      purchasedLessons: "已購買",
+      reservedLessons: "已預約",
+      completedLessons: "已完成",
+      unbookedLessons: "未預約",
+      lessonLinkTitle: "Lesson Link",
+      lessonLinkLead: "課程連結",
+      openLessonLink: "開?課程連結",
       nextCheck: "下次確認",
-      customerStatus: "上課狀態",
+      customerStatus: "上課?態",
       lessonCount: (count: number) => `${count}堂`,
       bookingRequestTitle: "送出預約申請",
-      bookingRequestLead: "請送出希望時間與課程內容。確認後會以電子郵件通知日程。",
+      bookingRequestLead: "請送出希望時間與課程?容。確認後會以電子郵件通知日程。",
       blockedMessage: "此電子郵件無法送出預約申請。",
       validationError: "請確認必填項目與電子郵件格式。預約申請尚未送出。",
       bookingSuccess: (count: number) => `已送出 ${count} 件預約申請。確認後會以電子郵件通知日程。`,
@@ -2078,20 +2695,23 @@ function getStudentPageCopy(language: PlatformLanguage) {
       japaneseLesson: "1對1日語課程",
       englishLesson: "英語發音教練課",
       lessonMenu: "課程選單",
-      deliveryNote: "上課方式會依選擇的講師空檔自動反映。實體課程需事先確認地點。",
+      bookableMenuNote: "此處僅可選擇已購買套裝課程，以及相同價格的課程。",
+      noPurchasedPackage: "尚無已購買的套裝課程",
+      noPurchasedPackageLead: "送出預約申請前，請先送出課程套裝購買申請。",
+      deliveryNote: "上課方式會依選擇的講師空?自動反映。實體課程需事先確認地點。",
       selectedSlots: "已選候選時段",
-      selectedSlotPlaceholder: "請從講師空檔日曆選擇候選時段。",
+      selectedSlotPlaceholder: "請從講師空?日?選擇候選時段。",
       selectedSlotCount: (count: number) => `已選擇 ${count} 個時段`,
       deliveryMode: "上課方式",
-      deliveryAuto: "選擇空檔後會自動反映。",
+      deliveryAuto: "選擇空?後會自動反映。",
       mixedDelivery: "多種方式（線上／實體）",
-      noManualSlot: "請從講師空檔日曆選擇時間。預約申請不接受手動輸入日期。",
+      noManualSlot: "請從講師空?日?選擇時間。預約申請不接受手動輸入日期。",
       recurringRequest: "作為固定預約提出申請",
       recurringNote: "選擇多個時段時，會作為固定預約候選一併送出。",
-      purpose: "目的／諮詢內容（選填）",
-      availabilityTitle: "講師空檔日曆",
+      purpose: "目的／諮詢?容（選填）",
+      availabilityTitle: "講師空?日?",
       availabilityLead: "僅顯示講師公開且尚未被預約的候選時段。點選時段後會加入預約申請。",
-      bookingCalendarTitle: "預約日曆",
+      bookingCalendarTitle: "預約日?",
       changeTitle: "改期／取消申請",
       changeLead: "預約確認後，如需改期或取消，請附上理由送出申請。確認後會以電子郵件通知。",
       requestType: "申請類型",
@@ -2102,15 +2722,15 @@ function getStudentPageCopy(language: PlatformLanguage) {
       changeSubmit: "送出申請",
       changeValidationError: "改期或取消申請必須填寫理由。",
       changeSuccess: (requestType: string) => `已送出${requestType}申請。確認後會以電子郵件通知。`,
-      changeMailError: (requestType: string) => `已記錄${requestType}申請，但電子郵件通知未能送出。如有需要請直接聯絡。`,
+      changeMailError: (requestType: string) => `已記?${requestType}申請，但電子郵件通知未能送出。如有需要請直接聯絡。`,
       bookingTimelineTitle: "預約時間軸",
-      statusLabel: "狀態",
-      detailLabel: "詳細內容",
+      statusLabel: "?態",
+      detailLabel: "詳細?容",
       twelveHourLabel: "12小時規則",
       twelveHourClose: "需個別確認",
-      twelveHourOpen: "在一般受理期間內",
+      twelveHourOpen: "在一般受理期間?",
       noConfirmedBookings: "目前尚無已確認的預約。",
-      noLessonNote: "此預約尚未登錄課程筆記。",
+      noLessonNote: "此預約尚未登?課程筆記。",
       futureLessonNote: "這是未來的預約。課程結束後會顯示課程筆記。",
       previousMonth: "上個月",
       nextMonth: "下個月"
@@ -2130,6 +2750,28 @@ function getMode(path: string) {
 
 function getLessonMenus(kind: LessonKind) {
   return kind === "japanese" ? japaneseLessonMenus : englishPronunciationMenus;
+}
+
+function getBookableLessonKinds(email: string, customer: CustomerRecord) {
+  const credits = getStudentLessonCredits(email, customer);
+  return Array.from(new Set(credits.filter((credit) => credit.remainingLessons > 0).map((credit) => credit.lessonKind)));
+}
+
+function getEligibleBookingMenus(kind: LessonKind, email: string, customer: CustomerRecord) {
+  const credits = getStudentLessonCredits(email, customer).filter((credit) => credit.lessonKind === kind && credit.remainingLessons > 0);
+  if (credits.length === 0) return [];
+
+  const menus = getLessonMenus(kind);
+  const purchasedMenuIds = new Set(credits.map((credit) => credit.lessonMenuId));
+  const purchasedPriceKeys = new Set(credits.map((credit) => `${credit.currency}:${credit.unitPrice}`));
+
+  return menus.filter((menu) => (
+    purchasedMenuIds.has(menu.id) || purchasedPriceKeys.has(`${menu.currency}:${menu.unitPrice}`)
+  ));
+}
+
+function getStudentLessonCredits(email: string, customer: CustomerRecord) {
+  return customer.email.toLowerCase() === email.toLowerCase() ? customer.lessonCredits : [];
 }
 
 function getBookingLessonKind(form: BookingFormState): LessonKind {
@@ -2196,7 +2838,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
     },
     "zh-Hant": {
       menuTitle: "課程選單",
-      menuLead: "課程依學習目的整理。各課程以卡片呈現，購買堂數與時間可在下方「課程購買」中選擇。",
+      menuLead: "課程依學習目的整理。各課程以?片呈現，購買堂數與時間可在下方「課程購買」中選擇。",
       purchaseTitle: "課程購買",
       purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。預約確認後，將提供請款與付款方式。",
       lessonMenu: "課程選單",
@@ -2235,7 +2877,7 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-free-talk": {
       en: { category: "Conversation", name: "Free Talk Course", description: "Practice natural responses, vocabulary, and paraphrasing through everyday topics." },
-      "zh-Hant": { category: "會話", name: "自由會話課程", description: "透過日常話題練習自然回應、詞彙與換句話說的能力。" }
+      "zh-Hant": { category: "會話", name: "自由會話課程", description: "透過日常話題練習自然回應、詞彙與換句話?的能力。" }
     },
     "jp-daily-conversation": {
       en: { category: "Conversation", name: "Daily Conversation Course", description: "Practice natural responses and expressions used in daily life." },
@@ -2247,7 +2889,7 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-business-negotiation": {
       en: { category: "Practical Business Japanese", name: "Internal Negotiation Training", description: "Practice requests, adjustments, objections, and consensus building at work." },
-      "zh-Hant": { category: "商務實用日語", name: "公司內部協調訓練", description: "練習工作中請求、協調、反駁與達成共識的表達。" }
+      "zh-Hant": { category: "商務實用日語", name: "公司?部協調訓練", description: "練習工作中請求、協調、反駁與達成共識的表達。" }
     },
     "jp-business-conversation": {
       en: { category: "Practical Business Japanese", name: "Business Conversation (meetings / reports / small talk)", description: "Build natural workplace speaking skills for meetings, updates, and casual communication." },
@@ -2255,11 +2897,11 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-business-writing": {
       en: { category: "Practical Business Japanese", name: "Business Writing", description: "Refine emails, chat messages, and reports so they are clear to the reader." },
-      "zh-Hant": { category: "商務實用日語", name: "商務寫作", description: "整理電子郵件、聊天訊息與報告文章，使內容更容易傳達。" }
+      "zh-Hant": { category: "商務實用日語", name: "商務寫作", description: "整理電子郵件、聊天訊息與報告文章，使?容更容易傳達。" }
     },
     "jp-business-presentation": {
       en: { category: "Practical Business Japanese", name: "Business Presentation", description: "Practice structure, explanation, and Q&A so you can present in Japanese with clarity." },
-      "zh-Hant": { category: "商務實用日語", name: "商務簡報", description: "練習架構、說明與問答，提升用日語清楚表達的能力。" }
+      "zh-Hant": { category: "商務實用日語", name: "商務簡報", description: "練習架構、?明與問答，提升用日語清楚表達的能力。" }
     },
     "jp-expat-prep": {
       en: { category: "Practical Business Japanese", name: "Japan Assignment Preparation", description: "Prepare workplace, daily life, and relationship-building Japanese before or after assignment in Japan." },
@@ -2267,15 +2909,15 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-intensive-interview": {
       en: { category: "Intensive Package within 3 months", name: "Interview Preparation (business / school / qualification)", description: "Work backward from the deadline to refine answers, structure, pronunciation, and natural responses.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月內短期集中方案", name: "面試準備（商務 / 入學 / 資格考試）", description: "依照期限整理預想問題、回答架構、發音與自然回應。", note: "2週內短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      "zh-Hant": { category: "3個月?短期集中方案", name: "面試準備（商務 / 入學 / 資格考試）", description: "依照期限整理預想問題、回答架構、發音與自然回應。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
     },
     "jp-intensive-presentation": {
       en: { category: "Intensive Package within 3 months", name: "Presentation Preparation", description: "Refine script, structure, Q&A, and delivery from the deadline backward.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月內短期集中方案", name: "簡報準備", description: "依照期限整理發表稿、架構、問答與說話方式。", note: "2週內短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      "zh-Hant": { category: "3個月?短期集中方案", name: "簡報準備", description: "依照期限整理發表稿、架構、問答與?話方式。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
     },
     "jp-intensive-exhibition": {
       en: { category: "Intensive Package within 3 months", name: "Exhibition Preparation", description: "Practice visitor support, product explanations, business card exchange, and opening sales conversations.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月內短期集中方案", name: "展覽會準備", description: "練習接待、商品說明、交換名片與商談開場的日語。", note: "2週內短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      "zh-Hant": { category: "3個月?短期集中方案", name: "展覽會準備", description: "練習接待、商品?明、交換名片與商談開場的日語。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
     },
     "jp-study-abroad": {
       en: { category: "Study Abroad Preparation", name: "Japan Study Abroad Preparation", description: "Prepare Japanese for classes, daily life, interviews, and school procedures.", note: "U20 discount available." },
@@ -2283,7 +2925,7 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-jlpt-n5": {
       en: { category: "JLPT Preparation", name: "N5 Preparation Course", description: "Build grammar, vocabulary, reading, and listening foundations steadily." },
-      "zh-Hant": { category: "JLPT 應試準備", name: "N5 準備課程", description: "穩定打好基礎文法、詞彙、閱讀與聽解。" }
+      "zh-Hant": { category: "JLPT 應試準備", name: "N5 準備課程", description: "穩定打好基礎文法、詞彙、?讀與聽解。" }
     },
     "jp-jlpt-n4-n2": {
       en: { category: "JLPT Preparation", name: "N4-N2 Preparation Course", description: "Organize weak points by level and improve scores through practice and review." },
@@ -2291,23 +2933,23 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     },
     "jp-jlpt-n1": {
       en: { category: "JLPT Preparation", name: "N1 Preparation Course", description: "Prepare for advanced vocabulary, reading, and listening with practical exam focus." },
-      "zh-Hant": { category: "JLPT 應試準備", name: "N1 準備課程", description: "以高階詞彙、閱讀與聽解為中心，進行實戰準備。" }
+      "zh-Hant": { category: "JLPT 應試準備", name: "N1 準備課程", description: "以高階詞彙、?讀與聽解為中心，進行實戰準備。" }
     },
     "en-trial": {
       en: { category: "Trial", name: "Trial Lesson", description: "A 25-minute first lesson to check pronunciation issues and training direction." },
       "zh-Hant": { category: "體驗", name: "體驗課", description: "25分鐘初次課程，確認目前發音課題與練習方向。" }
     },
     "en-single": {
-      en: { category: "Pronunciation Coaching", name: "1 Lesson", description: "A single session to check pronunciation, reading aloud, interviews, or presentation scripts." },
-      "zh-Hant": { category: "發音教練", name: "1堂課", description: "單次確認發音、朗讀、面試或簡報稿。" }
+      en: { category: "Pronunciation Coaching", name: "1 Lesson", description: "" },
+      "zh-Hant": { category: "發音教練", name: "1堂課", description: "" }
     },
     "en-five": {
-      en: { category: "Pronunciation Coaching", name: "5 Lessons", description: "A short package to steadily refine difficult sounds, rhythm, and intonation." },
-      "zh-Hant": { category: "發音教練", name: "5堂課", description: "短期方案，持續調整較困難的音、節奏與語調。" }
+      en: { category: "Pronunciation Coaching", name: "5 Lessons", description: "" },
+      "zh-Hant": { category: "發音教練", name: "5堂課", description: "" }
     },
     "en-ten": {
-      en: { category: "Pronunciation Coaching", name: "10 Lessons", description: "A continuing package to stabilize pronunciation patterns." },
-      "zh-Hant": { category: "發音教練", name: "10堂課", description: "持續方案，協助發音習慣穩定下來。" }
+      en: { category: "Pronunciation Coaching", name: "10 Lessons", description: "" },
+      "zh-Hant": { category: "發音教練", name: "10堂課", description: "" }
     }
   };
 
@@ -2365,10 +3007,10 @@ function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {
       rules: [
         "送出希望時間後，將以電子郵件通知日程。",
         "線上課程使用 Zoom 進行。",
-        "如需 Zoom 錄影，請事先告知。",
+        "如需 Zoom ?影，請事先告知。",
         "上課前請確認網路環境與設備。",
         "如需改期或取消，請附上理由提出申請。確認後將以郵件通知。",
-        "課程開始前 12 小時內提出改期，原則上不予退款。",
+        "課程開始前 12 小時?提出改期，原則上不予退款。",
         priceRule["zh-Hant"]
       ]
     }
@@ -2470,14 +3112,14 @@ function getReceiptCopy(language: PlatformLanguage) {
       issueDate: "開立日期",
       recipient: "抬頭",
       amount: "金額",
-      service: "服務內容",
+      service: "服務?容",
       paymentMethod: "付款方式",
       issuer: "開立者",
       email: "寄送信箱",
       online: "線上",
       inPerson: "實體",
       notSet: "未輸入",
-      note: "確認入款後，將開立正式收據。收據會包含抬頭、開立日期、金額、服務內容、付款方式、開立者資訊與收據編號。"
+      note: "確認入款後，將開立正式收據。收據會包含抬頭、開立日期、金額、服務?容、付款方式、開立者資訊與收據編號。"
     }
   } satisfies Record<PlatformLanguage, Record<string, string>>;
 

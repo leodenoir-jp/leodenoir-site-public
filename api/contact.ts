@@ -21,12 +21,18 @@ type ContactPayload = {
   clientType?: unknown;
   inquiryType?: unknown;
   message?: unknown;
+  subject?: unknown;
+  copyToRequester?: unknown;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function toText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function toBoolean(value: unknown) {
+  return value === true || value === "true";
 }
 
 function escapeHtml(value: string) {
@@ -54,6 +60,50 @@ function normalizeBody(body: unknown): ContactPayload {
   return {};
 }
 
+async function sendResendEmail({
+  resendApiKey,
+  fromEmail,
+  to,
+  replyTo,
+  subject,
+  text,
+  html
+}: {
+  resendApiKey: string;
+  fromEmail: string;
+  to: string;
+  replyTo: string;
+  subject: string;
+  text: string;
+  html: string;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to,
+      reply_to: replyTo,
+      subject,
+      text,
+      html
+    })
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error("Resend email send failed.", {
+      status: response.status,
+      statusText: response.statusText,
+      errorBody
+    });
+    throw new Error("Failed to send email.");
+  }
+}
+
 export default async function handler(req: ContactRequest, res: ContactResponse) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -75,6 +125,8 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const clientType = toText(body.clientType);
   const inquiryType = toText(body.inquiryType);
   const message = toText(body.message);
+  const requestedSubject = toText(body.subject);
+  const copyToRequester = toBoolean(body.copyToRequester);
 
   if (!name || !email || !inquiryType || !message) {
     return res.status(400).json({ message: "Required fields are missing." });
@@ -84,60 +136,56 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     return res.status(400).json({ message: "Email address is invalid." });
   }
 
+  const subject = requestedSubject || "お問い合わせがありました";
   const text = [
-    "公式サイトからお問い合わせがありました。",
+    "公式サイトから通知がありました。",
     "",
-    `お名前: ${name}`,
+    `名前: ${name}`,
     `メールアドレス: ${email}`,
-    `法人／個人: ${clientType || "未選択"}`,
-    `問い合わせ種別: ${inquiryType}`,
+    `法人/個人: ${clientType || "未選択"}`,
+    `種別: ${inquiryType}`,
     "",
-    "お問い合わせ内容:",
+    "内容:",
     message
   ].join("\n");
 
   const html = `
-    <p>公式サイトからお問い合わせがありました。</p>
+    <p>公式サイトから通知がありました。</p>
     <dl>
-      <dt>お名前</dt>
+      <dt>名前</dt>
       <dd>${escapeHtml(name)}</dd>
       <dt>メールアドレス</dt>
       <dd>${escapeHtml(email)}</dd>
-      <dt>法人／個人</dt>
+      <dt>法人/個人</dt>
       <dd>${escapeHtml(clientType || "未選択")}</dd>
-      <dt>問い合わせ種別</dt>
+      <dt>種別</dt>
       <dd>${escapeHtml(inquiryType)}</dd>
     </dl>
-    <p><strong>お問い合わせ内容</strong></p>
+    <p><strong>内容</strong></p>
     <p>${escapeHtml(message).replace(/\n/g, "<br />")}</p>
   `;
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: toEmail,
-        reply_to: email,
-        subject: "お問い合わせがありました",
-        text,
-        html
-      })
+    await sendResendEmail({
+      resendApiKey,
+      fromEmail,
+      to: toEmail,
+      replyTo: email,
+      subject,
+      text,
+      html
     });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error("Resend email send failed.", {
-        status: response.status,
-        statusText: response.statusText,
-        errorBody
+    if (copyToRequester) {
+      await sendResendEmail({
+        resendApiKey,
+        fromEmail,
+        to: email,
+        replyTo: toEmail,
+        subject,
+        text,
+        html
       });
-
-      return res.status(500).json({ message: "Failed to send email." });
     }
   } catch (error) {
     console.error("Resend email request failed.", {

@@ -521,11 +521,12 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 }
 
 function PlatformNav({ route, activePath }: { route: Route; activePath: string }) {
+  const normalizedActivePath = activePath === "/platform" ? "/learning/student" : activePath;
   const links = [
     { href: "/learning", label: "Summary" },
     { href: "/learning/japanese", label: "Japanese Lesson" },
     { href: "/learning/english", label: "English Coaching" },
-    { href: "/platform", label: "Student Page" },
+    { href: "/learning/student", label: "Student Page" },
     { href: "/learning/reviews", label: "Lesson Review" }
   ];
 
@@ -534,7 +535,7 @@ function PlatformNav({ route, activePath }: { route: Route; activePath: string }
       {links.map((link) => (
         <a
           key={link.href}
-          className={activePath === link.href ? "active" : ""}
+          className={normalizedActivePath === link.href ? "active" : ""}
           href={link.href}
           onClick={(event) => {
             event.preventDefault();
@@ -676,7 +677,7 @@ function LessonLanding({
             <strong>準備中</strong>
           </div>
           <p className="platform-note">{product.timezoneLabel}</p>
-          <button className="button secondary" type="button" onClick={() => route.navigate("/platform")}>
+          <button className="button secondary" type="button" onClick={() => route.navigate("/learning/student")}>
             {menuLabel.studentButton}
           </button>
         </aside>
@@ -1864,7 +1865,7 @@ function StudentDashboard({
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/platform`
+        redirectTo: `${window.location.origin}/learning/student`
       }
     });
     if (error) {
@@ -1900,7 +1901,7 @@ function StudentDashboard({
           email: nextEmail,
           options: {
             shouldCreateUser: true,
-            emailRedirectTo: `${window.location.origin}/platform`,
+            emailRedirectTo: `${window.location.origin}/learning/student`,
             data: {
               name: loginName.trim() || nextEmail.split("@")[0],
               provider: authProvider
@@ -1919,7 +1920,7 @@ function StudentDashboard({
         },
         body: JSON.stringify({
           identifier: loginEmail.trim(),
-          redirectTo: `${window.location.origin}/platform`
+          redirectTo: `${window.location.origin}/learning/student`
         })
       });
       setAuthMessage(response.ok ? "サインイン用リンクをメールで送信しました。メールをご確認ください。" : "StudentIDまたはメールアドレスを確認してください。");
@@ -2862,6 +2863,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
 
 function getMode(path: string) {
   if (path === "/learning") return "learning";
+  if (path === "/learning/student" || path === "/platform") return "student";
   if (path === "/learning/reviews") return "reviews";
   if (path === "/learning/tutor") return "tutor";
   if (path.startsWith("/learning/")) return "lesson";

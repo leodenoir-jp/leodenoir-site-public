@@ -20,8 +20,8 @@ const hasSupabaseAuthCallback = () => {
 };
 
 const normalizePath = () => {
-  if (hasSupabaseAuthCallback() && window.location.pathname !== "/platform") {
-    window.history.replaceState({}, "", `/platform${window.location.search}${window.location.hash}`);
+  if (hasSupabaseAuthCallback() && window.location.pathname !== "/learning/student") {
+    window.history.replaceState({}, "", `/learning/student${window.location.search}${window.location.hash}`);
   }
   const path = window.location.pathname.replace(/\/$/, "");
   return path === "" ? "/" : path;

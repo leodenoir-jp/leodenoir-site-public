@@ -59,6 +59,8 @@ type SupabaseUserLike = {
   app_metadata?: Record<string, unknown>;
 };
 
+type AuthStatus = "idle" | "checking" | "signed-in" | "failed";
+
 type LessonReview = {
   id: string;
   studentName: string;
@@ -91,10 +93,22 @@ type TutorAvailabilitySlot = {
 
 const storageKey = "ldn-platform-language";
 const studentEmailKey = "ldn-platform-student-email";
+const authPendingKey = "ldn-platform-auth-pending";
 const availabilityStorageKey = "ldn-platform-tutor-availability";
 const bookingsStorageKey = "ldn-platform-bookings";
 const studentProfilesStorageKey = "ldn-platform-student-profiles";
 const ownerEmail = "yu.leobiz003@outlook.com";
+
+function hasAuthCallbackInUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has("code") || params.has("error") || window.location.hash.includes("access_token") || window.location.hash.includes("error");
+}
+
+function getAuthCallbackError() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return params.get("error_description") || params.get("error") || hashParams.get("error_description") || hashParams.get("error");
+}
 const tutorLoginPlaceholder = "yourtutor@info.com";
 
 const initialBlockedStudents = ["blocked.student@example.com"];
@@ -198,6 +212,14 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   });
   const [bookingForm, setBookingForm] = useState<BookingFormState>(initialBookingForm);
   const [bookingMessage, setBookingMessage] = useState("");
+  const [authStatus, setAuthStatus] = useState<AuthStatus>(() => (
+    hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey) ? "checking" : "idle"
+  ));
+  const [authStatusMessage, setAuthStatusMessage] = useState(() => (
+    hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey)
+      ? "Googleログインの状態を確認しています。少しだけお待ちください。"
+      : ""
+  ));
   const [blockedStudents, setBlockedStudents] = useState<string[]>(initialBlockedStudents);
   const [reviews, setReviews] = useState<LessonReview[]>(importedLessonReviews);
   const [availabilitySlots, setAvailabilitySlotsBase] = useState<TutorAvailabilitySlot[]>(() => {
@@ -226,7 +248,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     let mounted = true;
 
     const applyUser = async (user: SupabaseUserLike | null) => {
-      if (!mounted || !user?.email) return;
+      if (!mounted || !user?.email) return false;
       let profile: StudentProfile;
       try {
         profile = await ensureSupabaseStudentProfile(user, studentProfiles);
@@ -236,24 +258,44 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         });
         profile = buildStudentProfileFromSupabaseUser(user, studentProfiles);
       }
-      if (!mounted) return;
+      if (!mounted) return false;
       if (!studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
         setStudentProfiles([...studentProfiles, profile]);
       }
       setStudentEmail(profile.email);
       setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
       window.localStorage.setItem(studentEmailKey, profile.email);
+      window.sessionStorage.removeItem(authPendingKey);
+      setAuthStatus("signed-in");
+      setAuthStatusMessage("Googleログインが完了しました。");
+      return true;
     };
 
     const resolveAuthSession = async () => {
+      const hasAuthReturn = hasAuthCallbackInUrl() || Boolean(window.sessionStorage.getItem(authPendingKey));
+      const callbackError = getAuthCallbackError();
+      if (callbackError) {
+        window.sessionStorage.removeItem(authPendingKey);
+        setAuthStatus("failed");
+        setAuthStatusMessage(`Googleログインを完了できませんでした：${callbackError}`);
+        return;
+      }
+      if (hasAuthReturn) {
+        setAuthStatus("checking");
+        setAuthStatusMessage("Googleログインの状態を確認しています。少しだけお待ちください。");
+      }
+
+      let applied = false;
       const hasAuthCode = new URLSearchParams(window.location.search).has("code");
       if (hasAuthCode) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
         if (error) {
           console.error("Supabase OAuth callback exchange failed.", { message: error.message });
+          setAuthStatus("failed");
+          setAuthStatusMessage(`Googleログイン後の確認でエラーが発生しました：${error.message}`);
         } else {
           window.history.replaceState({}, "", window.location.pathname);
-          await applyUser(data.session?.user ?? null);
+          applied = await applyUser(data.session?.user ?? null);
         }
       }
 
@@ -261,16 +303,22 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       if (error) {
         console.error("Supabase session lookup failed.", { message: error.message });
       }
-      await applyUser(data.session?.user ?? null);
+      applied = (await applyUser(data.session?.user ?? null)) || applied;
+
+      const userResult = await supabase.auth.getUser();
+      if (userResult.error) {
+        console.error("Supabase user lookup failed.", { message: userResult.error.message });
+      }
+      applied = (await applyUser(userResult.data.user)) || applied;
+
+      if (hasAuthReturn && !applied) {
+        window.sessionStorage.removeItem(authPendingKey);
+        setAuthStatus("failed");
+        setAuthStatusMessage("Googleログイン後のセッションを確認できませんでした。SupabaseのRedirect URLとVercelの環境変数を確認してください。");
+      }
     };
 
     void resolveAuthSession();
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (error) {
-        console.error("Supabase user lookup failed.", { message: error.message });
-      }
-      return applyUser(data.user);
-    });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       void applyUser(session?.user ?? null);
     });
@@ -512,6 +560,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               bookingMessage={bookingMessage}
               availabilitySlots={availabilitySlots}
               supabaseAvailable={supabaseAvailable}
+              authStatus={authStatus}
+              authStatusMessage={authStatusMessage}
             />
           )}
         </div>
@@ -1800,7 +1850,9 @@ function StudentDashboard({
   setChangeRequest,
   submitChangeRequest,
   bookingMessage,
-  supabaseAvailable
+  supabaseAvailable,
+  authStatus,
+  authStatusMessage
 }: {
   language: PlatformLanguage;
   bookings: BookingRecord[];
@@ -1820,6 +1872,8 @@ function StudentDashboard({
   submitChangeRequest: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   bookingMessage: string;
   supabaseAvailable: boolean;
+  authStatus: AuthStatus;
+  authStatusMessage: string;
 }) {
   const [loginEmail, setLoginEmail] = useState(studentEmail);
   const [loginName, setLoginName] = useState("");
@@ -1833,6 +1887,15 @@ function StudentDashboard({
   const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const text = getStudentPageCopy(language);
+
+  useEffect(() => {
+    if (authStatusMessage) {
+      setAuthMessage(authStatusMessage);
+      if (authStatus === "checking") {
+        setAuthProvider("google");
+      }
+    }
+  }, [authStatus, authStatusMessage]);
   const normalizedEmail = studentEmail.toLowerCase();
   const isOwner = normalizedEmail === ownerEmail;
   const visibleBookings = bookings.filter((booking) => booking.studentEmail.toLowerCase() === normalizedEmail);
@@ -1862,6 +1925,7 @@ function StudentDashboard({
     }
 
     setAuthBusy(true);
+    window.sessionStorage.setItem(authPendingKey, "google");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -1869,6 +1933,7 @@ function StudentDashboard({
       }
     });
     if (error) {
+      window.sessionStorage.removeItem(authPendingKey);
       setAuthMessage(error.message);
       setAuthBusy(false);
     }
@@ -2014,8 +2079,8 @@ function StudentDashboard({
             </button>
           </div>
           <div className="auth-provider-grid">
-            <button className={`button secondary ${authProvider === "google" ? "active" : ""}`} type="button" onClick={() => void startGoogleAuth()} disabled={authBusy}>
-              {authBusy ? "Googleへ移動中..." : "Google"}
+            <button className={`button secondary ${authProvider === "google" ? "active" : ""}`} type="button" onClick={() => void startGoogleAuth()} disabled={authBusy || authStatus === "checking"}>
+              {authBusy || authStatus === "checking" ? "Google確認中..." : "Google"}
             </button>
             <button className={`button secondary ${authProvider === "email" ? "active" : ""}`} type="button" onClick={selectEmailAuth}>
               Email
@@ -2035,7 +2100,15 @@ function StudentDashboard({
               </label>
             </div>
           ) : null}
-          {authMessage ? <p className={authMessage.startsWith("StudentID") ? "form-success" : "form-error"}>{authMessage}</p> : null}
+          {authMessage ? (
+            <p className={
+              authStatus === "checking" || authStatus === "signed-in" || authMessage.startsWith("StudentID") || authMessage.includes("送信しました")
+                ? "form-success"
+                : "form-error"
+            }>
+              {authMessage}
+            </p>
+          ) : null}
           {authProvider === "email" ? (
             <button className="button primary" type="submit">
               {authMode === "signup" ? text.signUpButton : text.loginButton}
@@ -2057,8 +2130,10 @@ function StudentDashboard({
         <div className="student-session">
           <p className="platform-badge">{activeCustomer.email}</p>
           <button className="button secondary" type="button" onClick={() => {
+            void getSupabaseClient()?.auth.signOut();
             setStudentEmail("");
             window.localStorage.removeItem(studentEmailKey);
+            window.sessionStorage.removeItem(authPendingKey);
           }}>
             {text.switchButton}
           </button>
@@ -2227,9 +2302,9 @@ function BookingCalendar({
   return (
     <div className="booking-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>?</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>&lt;</button>
         <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>?</button>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>&gt;</button>
       </div>
       <div className="calendar-weekdays">
         {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
@@ -2308,9 +2383,9 @@ function AvailabilityCalendar({
   return (
     <div className="booking-calendar availability-calendar">
       <div className="calendar-toolbar">
-        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>?</button>
+        <button type="button" onClick={() => moveMonth(-1)} aria-label={getStudentPageCopy(language).previousMonth}>&lt;</button>
         <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
-        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>?</button>
+        <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>&gt;</button>
       </div>
       <div className="calendar-weekdays">
         {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
@@ -2638,7 +2713,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       localAuthFallback: "現在は確認用のローカルログインです。Supabase設定後に安全な認証へ切り替わります。",
       dashboardTitle: "予約状況、パッケージ、学習履歴",
       dashboardLead: "予約希望、確定済みの予約、パッケージ状況を確認できます。日程については内容確認後にメールでご案内します。",
-      switchButton: "切り替え",
+      switchButton: "ログアウト",
       remainingLessons: "残レッスン",
       purchasedLessons: "購入済",
       reservedLessons: "予約済",
@@ -2715,7 +2790,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       localAuthFallback: "Local preview login is currently active. Secure authentication will be enabled after Supabase configuration.",
       dashboardTitle: "Bookings, Packages, and Lesson History",
       dashboardLead: "You can check booking requests, confirmed bookings, and package status. Schedule details will be shared by email after review.",
-      switchButton: "Switch",
+      switchButton: "Log out",
       remainingLessons: "Remaining lessons",
       purchasedLessons: "Purchased",
       reservedLessons: "Booked",
@@ -2792,7 +2867,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       localAuthFallback: "目前使用本機預覽登入。完成 Supabase 設定後會切換為安全認證。",
       dashboardTitle: "預約、套裝課程與學習紀?",
       dashboardLead: "可確認預約申請、已確認的預約與課程套裝?態。日程確認後會以電子郵件通知。",
-      switchButton: "切換",
+      switchButton: "登出",
       remainingLessons: "剩餘課程",
       purchasedLessons: "已購買",
       reservedLessons: "已預約",

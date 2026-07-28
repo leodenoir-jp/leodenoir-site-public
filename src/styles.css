@@ -1125,6 +1125,32 @@ textarea {
   max-width: 720px;
 }
 
+.purchase-panel.is-complete {
+  border-color: rgba(38, 96, 129, 0.45);
+  box-shadow: 0 22px 80px rgba(6, 24, 38, 0.26);
+}
+
+.purchase-complete {
+  background: #eaf4f8;
+  border: 1px solid rgba(38, 96, 129, 0.28);
+  border-radius: var(--radius);
+  color: var(--navy);
+  display: grid;
+  gap: 4px;
+  margin: 14px 0;
+  padding: 14px 16px;
+}
+
+.purchase-complete strong {
+  font-size: 0.98rem;
+}
+
+.purchase-complete span {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
 .purchase-summary {
   display: grid;
   gap: 10px;
@@ -1170,6 +1196,18 @@ textarea {
 }
 
 .payment-methods input {
+  min-height: auto;
+  width: auto;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+.checkbox-row input {
   min-height: auto;
   width: auto;
 }

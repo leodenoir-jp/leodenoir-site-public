@@ -150,6 +150,7 @@ Vercelの Project Settings → Environment Variables に以下を設定してく
 - `RESEND_API_KEY`: Resend のAPIキー
 - `CONTACT_TO_EMAIL`: 問い合わせの受信先メールアドレス
 - `CONTACT_FROM_EMAIL`: Resendで送信元として利用するメールアドレス
+- `PURCHASE_TO_EMAIL`: Learningの購入希望通知の受信先メールアドレス
 
 送信先メールアドレス: `yu.leobiz003@outlook.com`
 

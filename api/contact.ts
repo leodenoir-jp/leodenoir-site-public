@@ -23,6 +23,9 @@ type ContactPayload = {
   message?: unknown;
   subject?: unknown;
   copyToRequester?: unknown;
+  copySubject?: unknown;
+  copyMessage?: unknown;
+  recipientGroup?: unknown;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -127,6 +130,9 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const message = toText(body.message);
   const requestedSubject = toText(body.subject);
   const copyToRequester = toBoolean(body.copyToRequester);
+  const copySubject = toText(body.copySubject);
+  const copyMessage = toText(body.copyMessage);
+  const recipientGroup = toText(body.recipientGroup);
 
   if (!name || !email || !inquiryType || !message) {
     return res.status(400).json({ message: "Required fields are missing." });
@@ -136,6 +142,9 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     return res.status(400).json({ message: "Email address is invalid." });
   }
 
+  const recipientEmail = recipientGroup === "purchase"
+    ? (process.env.PURCHASE_TO_EMAIL || toEmail)
+    : toEmail;
   const subject = requestedSubject || "お問い合わせがありました";
   const text = [
     "公式サイトから通知がありました。",
@@ -169,7 +178,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     await sendResendEmail({
       resendApiKey,
       fromEmail,
-      to: toEmail,
+      to: recipientEmail,
       replyTo: email,
       subject,
       text,
@@ -177,15 +186,22 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     });
 
     if (copyToRequester) {
-      await sendResendEmail({
-        resendApiKey,
-        fromEmail,
-        to: email,
-        replyTo: toEmail,
-        subject,
-        text,
-        html
-      });
+      const requesterText = copyMessage || text;
+      try {
+        await sendResendEmail({
+          resendApiKey,
+          fromEmail,
+          to: email,
+          replyTo: recipientEmail,
+          subject: copySubject || subject,
+          text: requesterText,
+          html: `<p>${escapeHtml(requesterText).replace(/\n/g, "<br />")}</p>`
+        });
+      } catch (error) {
+        console.error("Requester copy email failed.", {
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
     }
   } catch (error) {
     console.error("Resend email request failed.", {

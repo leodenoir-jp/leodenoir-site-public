@@ -130,9 +130,22 @@ type PlatformNotification = {
   message: string;
   subject?: string;
   copyToRequester?: boolean;
+  copySubject?: string;
+  copyMessage?: string;
+  recipientGroup?: "default" | "purchase";
 };
 
-async function sendPlatformNotification({ name, email, inquiryType, message, subject, copyToRequester }: PlatformNotification) {
+async function sendPlatformNotification({
+  name,
+  email,
+  inquiryType,
+  message,
+  subject,
+  copyToRequester,
+  copySubject,
+  copyMessage,
+  recipientGroup
+}: PlatformNotification) {
   try {
     const response = await fetch("/api/contact", {
       method: "POST",
@@ -147,7 +160,10 @@ async function sendPlatformNotification({ name, email, inquiryType, message, sub
         inquiryType,
         message,
         subject,
-        copyToRequester
+        copyToRequester,
+        copySubject,
+        copyMessage,
+        recipientGroup
       })
     });
 
@@ -966,9 +982,12 @@ function PurchaseDialog({
   onClose: () => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "PayPay">("PayPal");
+  const [receiptRequested, setReceiptRequested] = useState(false);
   const [receiptName, setReceiptName] = useState(bookingForm.name);
   const [receiptEmail, setReceiptEmail] = useState(bookingForm.email);
   const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
+  const [purchaseSent, setPurchaseSent] = useState(false);
   const text = getLessonMenuLabelCopy(language);
   const receiptCopy = getReceiptCopy(language);
   const selectedMenuText = getMenuText(selectedMenu, language);
@@ -984,40 +1003,86 @@ function PurchaseDialog({
       return;
     }
 
+    if (purchaseSubmitting || purchaseSent) return;
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiptEmailNormalized)) {
+      setPurchaseMessage("購入希望の送信には、連絡先メールアドレスを入力してください。");
+      return;
+    }
+
+    setPurchaseSubmitting(true);
+    setPurchaseMessage("");
+    const requesterCopy = [
+      `${receiptName || "受講者"} 様`,
+      "",
+      "Leo de Noir / Workaholic Owl Learning Menuより、レッスンパッケージの購入希望を受け付けました。",
+      "",
+      "内容を確認のうえ、講師よりPayPalまたはPayPayの決済方法をご案内します。",
+      "決済案内のメールをお待ちください。",
+      "",
+      "購入希望内容",
+      `コース: ${selectedMenuText.category}：${selectedMenuText.name}`,
+      `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
+      `時間: ${bookingForm.durationMinutes}${text.minutes}`,
+      `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
+      `金額目安: ${priceSummary}`,
+      `支払い方法: ${paymentMethod}`,
+      `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
+      receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
+      "",
+      "Leo de Noir / Workaholic Owl"
+    ].filter(Boolean).join("\n");
+
     const notificationSent = await sendPlatformNotification({
       name: receiptName || "Lesson purchase draft",
       email: receiptEmail,
       inquiryType: "Learning購入希望内容確認",
+      subject: "購入希望が送信されました",
+      recipientGroup: "purchase",
+      copyToRequester: true,
+      copySubject: "購入リクエストを受け付けました",
+      copyMessage: requesterCopy,
       message: [
         "Learningページから購入希望内容が送信されました。",
         "",
+        `表示名: ${receiptName || "未入力"}`,
+        `生徒メールアドレス: ${receiptEmail || "未入力"}`,
         `コース: ${selectedMenuText.category}：${selectedMenuText.name}`,
         `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
         `時間: ${bookingForm.durationMinutes}${text.minutes}`,
         `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
         `金額目安: ${priceSummary}`,
         `支払い方法: ${paymentMethod}`,
-        `領収書宛名: ${receiptName || "未入力"}`,
-        `送付先メール: ${receiptEmail || "未入力"}`,
-        `領収書番号: ${receiptNumber}`
-      ].join("\n")
+        `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
+        receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
+        receiptRequested ? `領収書送付先メール: ${receiptEmail || "未入力"}` : "",
+        receiptRequested ? `領収書番号: ${receiptNumber}` : ""
+      ].filter(Boolean).join("\n")
     });
 
+    setPurchaseSubmitting(false);
+    setPurchaseSent(notificationSent);
     setPurchaseMessage(
       notificationSent
-        ? "購入希望を送信しました。内容確認後、支払い方法に応じてPayPalまたはPayPayのご案内をメールでお送りします。"
-        : "購入希望内容を保存しました。ただしメール通知に失敗したため、必要に応じて直接ご連絡ください。"
+        ? "購入希望を送信しました。講師からの決済方法案内をお待ちください。"
+        : "購入希望を送信できませんでした。時間をおいて再度お試しいただくか、直接お問い合わせください。"
     );
   };
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal-panel purchase-panel" role="dialog" aria-modal="true" aria-labelledby="purchase-dialog-title">
+      <div className={`modal-panel purchase-panel ${purchaseSent ? "is-complete" : ""}`} role="dialog" aria-modal="true" aria-labelledby="purchase-dialog-title">
         <button className="modal-close" type="button" onClick={onClose} aria-label="購入画面を閉じる">
           ×
         </button>
         <h3 id="purchase-dialog-title">購入希望内容確認</h3>
-        {purchaseMessage ? <p className={isBlocked ? "form-error" : "form-success"}>{purchaseMessage}</p> : null}
+        {purchaseMessage ? <p className={isBlocked || !purchaseSent ? "form-error" : "form-success"}>{purchaseMessage}</p> : null}
+        {purchaseSent ? (
+          <div className="purchase-complete" role="status">
+            <strong>送信完了</strong>
+            <span>購入希望を受け付けました。講師からの決済方法案内をメールでお送りします。</span>
+          </div>
+        ) : null}
         <div className="purchase-summary">
           <p><strong>{text.course}</strong><span>{selectedMenuText.category}：{selectedMenuText.name}</span></p>
           <p><strong>{text.deliveryMode}</strong><span>{bookingForm.deliveryMode === "online" ? text.online : text.inPerson}</span></p>
@@ -1029,83 +1094,94 @@ function PurchaseDialog({
           <fieldset className="payment-methods">
             <legend>支払い方法確認</legend>
             <label>
-              <input type="radio" name="payment-method" checked={paymentMethod === "PayPal"} onChange={() => setPaymentMethod("PayPal")} />
+              <input type="radio" name="payment-method" checked={paymentMethod === "PayPal"} onChange={() => setPaymentMethod("PayPal")} disabled={purchaseSent} />
               PayPal
             </label>
             <label>
-              <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => setPaymentMethod("PayPay")} />
+              <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => setPaymentMethod("PayPay")} disabled={purchaseSent} />
               PayPay
             </label>
           </fieldset>
           <label>
-            領収書宛名
-            <input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} />
+            表示名
+            <input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} disabled={purchaseSent} />
           </label>
           <label>
-            領収書送付先メールアドレス
-            <input type="email" value={receiptEmail} onChange={(event) => setReceiptEmail(event.target.value)} />
+            連絡先メールアドレス
+            <input type="email" value={receiptEmail} onChange={(event) => setReceiptEmail(event.target.value)} disabled={purchaseSent} required />
           </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={receiptRequested} onChange={(event) => setReceiptRequested(event.target.checked)} disabled={purchaseSent} />
+            領収書発行を希望する
+          </label>
+          {receiptRequested ? (
+            <label>
+              領収書宛名
+              <input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} disabled={purchaseSent} />
+            </label>
+          ) : null}
         </div>
-        <section className="receipt-preview" aria-label={receiptCopy.title}>
-          <div>
-            <p className="eyebrow">{receiptCopy.badge}</p>
-            <h4>{receiptCopy.title}</h4>
-          </div>
-          <dl>
+        {receiptRequested ? (
+          <section className="receipt-preview" aria-label={receiptCopy.title}>
             <div>
-              <dt>{receiptCopy.receiptNo}</dt>
-              <dd>{receiptNumber}</dd>
+              <p className="eyebrow">{receiptCopy.badge}</p>
+              <h4>{receiptCopy.title}</h4>
             </div>
-            <div>
-              <dt>{receiptCopy.issueDate}</dt>
-              <dd>{issueDate}</dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.recipient}</dt>
-              <dd>{receiptName || receiptCopy.notSet}</dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.amount}</dt>
-              <dd>{priceSummary}</dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.service}</dt>
-              <dd>{selectedMenuText.category}：{selectedMenuText.name} / {deliveryLabel} / {bookingForm.durationMinutes}min. x {bookingForm.lessonCount}</dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.paymentMethod}</dt>
-              <dd>{paymentMethod}</dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.issuer}</dt>
-              <dd>
-                Leo de Noir / Workaholic Owl<br />
-                Yukiko Ukei<br />
-                https://leodenoir.com<br />
-                yu.leobiz003@outlook.com
-              </dd>
-            </div>
-            <div>
-              <dt>{receiptCopy.email}</dt>
-              <dd>{receiptEmail || receiptCopy.notSet}</dd>
-            </div>
-          </dl>
-          <p>{receiptCopy.note}</p>
-        </section>
+            <dl>
+              <div>
+                <dt>{receiptCopy.receiptNo}</dt>
+                <dd>{receiptNumber}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.issueDate}</dt>
+                <dd>{issueDate}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.recipient}</dt>
+                <dd>{receiptName || receiptCopy.notSet}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.amount}</dt>
+                <dd>{priceSummary}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.service}</dt>
+                <dd>{selectedMenuText.category}：{selectedMenuText.name} / {deliveryLabel} / {bookingForm.durationMinutes}min. x {bookingForm.lessonCount}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.paymentMethod}</dt>
+                <dd>{paymentMethod}</dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.issuer}</dt>
+                <dd>
+                  Leo de Noir / Workaholic Owl<br />
+                  Yukiko Ukei<br />
+                  https://leodenoir.com<br />
+                  yu.leobiz003@outlook.com
+                </dd>
+              </div>
+              <div>
+                <dt>{receiptCopy.email}</dt>
+                <dd>{receiptEmail || receiptCopy.notSet}</dd>
+              </div>
+            </dl>
+            <p>{receiptCopy.note}</p>
+          </section>
+        ) : null}
         <p className="platform-note">この画面では購入希望内容を送信します。決済はこの場では完了しません。内容確認後、PayPalまたはPayPayの支払い案内をメールでお送りします。</p>
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>
-            閉じる
+            {purchaseSent ? "閉じる" : "閉じる"}
           </button>
-          <button className="button primary" type="button" onClick={savePurchaseDraft} disabled={isBlocked}>
-            購入希望を送信
+          <button className="button primary" type="button" onClick={savePurchaseDraft} disabled={isBlocked || purchaseSubmitting || purchaseSent}>
+            {purchaseSubmitting ? "送信中..." : purchaseSent ? "送信済み" : "購入希望を送信"}
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 function BookingRequestCard({
   language,
   customer,
@@ -2014,20 +2090,6 @@ function StudentDashboard({
       setBookingForm({ ...bookingForm, email: nextEmail, name: profile.name });
       window.localStorage.setItem(studentEmailKey, nextEmail);
       setAuthMessage(`StudentID: ${profile.studentId}`);
-      await sendPlatformNotification({
-        name: profile.name,
-        email: nextEmail,
-        inquiryType: "Learning生徒サインアップ",
-        subject: "Learning生徒サインアップがありました",
-        message: [
-          "Learningページで生徒サインアップがありました。",
-          "",
-          `StudentID: ${profile.studentId}`,
-          `登録メールアドレス: ${nextEmail}`,
-          `サインアップ方法: ${formatAuthProvider(authProvider)}`,
-          `登録日時: ${profile.createdAt}`
-        ].join("\n")
-      });
       return;
     }
 

@@ -1513,6 +1513,7 @@ function TutorAvailabilityPage({
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
   const [lessonNoteDrafts, setLessonNoteDrafts] = useState<Record<string, string>>({});
+  const [lessonNoteMessages, setLessonNoteMessages] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     startDate: "",
     startTime: "19:00",
@@ -1619,6 +1620,7 @@ function TutorAvailabilityPage({
   const sendLessonNote = async (booking: BookingRecord) => {
     const note = (lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim();
     if (!note) return;
+    setLessonNoteMessages({ ...lessonNoteMessages, [booking.id]: `送信中: ${booking.studentEmail}` });
 
     const sent = await sendPlatformNotification({
       name: booking.student,
@@ -1638,7 +1640,10 @@ function TutorAvailabilityPage({
       ].join("\n")
     });
 
-    if (!sent) return;
+    if (!sent) {
+      setLessonNoteMessages({ ...lessonNoteMessages, [booking.id]: `送信に失敗しました: ${booking.studentEmail}` });
+      return;
+    }
 
     setBookings((current) => current.map((item) => (
       item.id === booking.id ? { ...item, reason: note, lessonNoteSent: true } : item
@@ -1646,6 +1651,7 @@ function TutorAvailabilityPage({
     const nextDrafts = { ...lessonNoteDrafts };
     delete nextDrafts[booking.id];
     setLessonNoteDrafts(nextDrafts);
+    setLessonNoteMessages({ ...lessonNoteMessages, [booking.id]: `送信完了: ${booking.studentEmail}` });
   };
 
   const persistStudentZoomLink = async (summary: ReturnType<typeof buildStudentPackageSummary>, zoomLink: string) => {
@@ -1903,6 +1909,12 @@ function TutorAvailabilityPage({
             <article key={booking.id} className="lesson-note-record">
               <strong>{booking.id} / {booking.student}</strong>
               <span>{formatLessonKind(booking.lessonKind, "ja")} / {formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
+              <span>送信先: {booking.studentEmail}</span>
+              {lessonNoteMessages[booking.id] ? (
+                <p className={lessonNoteMessages[booking.id].startsWith("送信完了") ? "form-success" : "form-error"}>
+                  {lessonNoteMessages[booking.id]}
+                </p>
+              ) : null}
               <label>
                 レッスンノート
                 <textarea
@@ -2545,17 +2557,12 @@ function StudentDashboard({
             <button className="modal-close" type="button" onClick={() => setSelectedBooking(null)} aria-label="閉じる">×</button>
             <p className="eyebrow">Booking Detail</p>
             <h3>{selectedBooking.id} / {formatDateTime(selectedBooking.requestedSlot)}</h3>
-            <p>{getBookingCourseName(selectedBooking)}</p>
+            <p>{formatLessonKind(selectedBooking.lessonKind, language)}</p>
             {packageSummary.zoomLink && !isPastBooking(selectedBooking.requestedSlot) ? (
               <a className="button secondary" href={packageSummary.zoomLink} target="_blank" rel="noreferrer">
                 {text.openLessonLink}
               </a>
             ) : null}
-            {isPastBooking(selectedBooking.requestedSlot) ? (
-              <p>{selectedBooking.reason ?? text.noLessonNote}</p>
-            ) : (
-              <p>{text.futureLessonNote}</p>
-            )}
           </div>
         </div>
       ) : null}

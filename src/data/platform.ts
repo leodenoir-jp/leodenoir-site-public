@@ -57,6 +57,7 @@ export type BookingRecord = {
   reason?: string;
   approvalGate: ApprovalGate;
   creditAction?: "hold" | "restore_pending" | "restored" | "consumed";
+  lessonNoteSent?: boolean;
 };
 
 export type TimelineEvent = {
@@ -83,7 +84,6 @@ export type CustomerRecord = {
     purchasedLessons: number;
     remainingLessons: number;
     purchasedAt: string;
-    zoomLink?: string;
   }[];
   renewalDue: string;
   consent: {
@@ -485,8 +485,7 @@ export const demoCustomer: CustomerRecord = {
       unitPrice: 30,
       purchasedLessons: 10,
       remainingLessons: 3,
-      purchasedAt: "2026-07-20T10:00:00+09:00",
-      zoomLink: "https://zoom.us/j/leo-student-demo"
+      purchasedAt: "2026-07-20T10:00:00+09:00"
     }
   ],
   renewalDue: "2026-08-12",

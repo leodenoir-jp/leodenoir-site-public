@@ -7,9 +7,13 @@ create table if not exists public.students (
   email text not null unique,
   name text,
   provider text not null default 'email',
+  zoom_link text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.students
+  add column if not exists zoom_link text;
 
 create table if not exists public.lesson_packages (
   id uuid primary key default gen_random_uuid(),
@@ -21,8 +25,7 @@ create table if not exists public.lesson_packages (
   unit_price numeric not null,
   purchased_lessons integer not null check (purchased_lessons > 0),
   remaining_lessons integer not null check (remaining_lessons >= 0),
-  purchased_at timestamptz not null default now(),
-  zoom_link text
+  purchased_at timestamptz not null default now()
 );
 
 create table if not exists public.bookings (

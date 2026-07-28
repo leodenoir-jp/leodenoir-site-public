@@ -50,6 +50,7 @@ type StudentProfile = {
   email: string;
   provider: "google" | "email";
   createdAt: string;
+  zoomLink?: string;
 };
 
 type SupabaseUserLike = {
@@ -183,7 +184,8 @@ const initialStudentProfiles: StudentProfile[] = [
     name: demoCustomer.name,
     email: demoCustomer.email,
     provider: "email",
-    createdAt: "2026-07-20T10:00:00+09:00"
+    createdAt: "2026-07-20T10:00:00+09:00",
+    zoomLink: "https://zoom.us/j/leo-student-demo"
   }
 ];
 
@@ -277,7 +279,11 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         profile = buildStudentProfileFromSupabaseUser(user, studentProfiles);
       }
       if (!mounted) return false;
-      if (!studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
+      if (studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
+        setStudentProfiles(studentProfiles.map((item) => (
+          item.email.toLowerCase() === profile.email.toLowerCase() ? { ...item, ...profile } : item
+        )));
+      } else {
         setStudentProfiles([...studentProfiles, profile]);
       }
       setStudentEmail(profile.email);
@@ -542,6 +548,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               setBookings={setBookings}
               customer={customer}
               studentProfiles={studentProfiles}
+              setStudentProfiles={setStudentProfiles}
               studentEmail={studentEmail}
               setStudentEmail={setStudentEmail}
               availabilitySlots={availabilitySlots}
@@ -1480,6 +1487,7 @@ function TutorAvailabilityPage({
   setBookings,
   customer,
   studentProfiles,
+  setStudentProfiles,
   studentEmail,
   setStudentEmail,
   availabilitySlots,
@@ -1491,6 +1499,7 @@ function TutorAvailabilityPage({
   setBookings: (bookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => void;
   customer: CustomerRecord;
   studentProfiles: StudentProfile[];
+  setStudentProfiles: (profiles: StudentProfile[]) => void;
   studentEmail: string;
   setStudentEmail: (email: string) => void;
   availabilitySlots: TutorAvailabilitySlot[];
@@ -1502,6 +1511,8 @@ function TutorAvailabilityPage({
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [lessonNoteDrafts, setLessonNoteDrafts] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     startDate: "",
     startTime: "19:00",
@@ -1533,8 +1544,25 @@ function TutorAvailabilityPage({
   const isOwner = studentEmail.toLowerCase() === ownerEmail;
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
+  const completedBookingsWithoutNotes = bookings.filter((booking) => (
+    booking.status === "approved" && isPastBooking(booking.requestedSlot) && !booking.lessonNoteSent
+  ));
   const studentPackageSummaries = buildStudentPackageSummaries(bookings, customer, studentProfiles);
+  const filteredStudentPackageSummaries = studentPackageSummaries.filter((summary) => {
+    const keyword = studentSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return [
+      summary.name,
+      summary.email,
+      summary.studentId,
+      summary.packageLabel,
+      summary.zoomLink
+    ].some((value) => value.toLowerCase().includes(keyword));
+  });
   const recurringEndTimeInvalid = timeToMinutes(recurringForm.endTime) <= timeToMinutes(recurringForm.startTime);
+  const selectedTutorBookingZoomLink = selectedTutorBooking
+    ? studentProfiles.find((profile) => profile.email.toLowerCase() === selectedTutorBooking.studentEmail.toLowerCase())?.zoomLink ?? ""
+    : "";
 
   const handleLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1564,6 +1592,82 @@ function TutorAvailabilityPage({
 
   const removeAvailabilitySlot = (slotId: string) => {
     setAvailabilitySlots(availabilitySlots.filter((slot) => slot.id !== slotId));
+  };
+
+  const updateStudentZoomLink = (email: string, zoomLink: string) => {
+    const normalizedEmail = email.toLowerCase();
+    const existingProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
+    const nextProfile = existingProfile ?? {
+      studentId: generateStudentId(studentProfiles),
+      name: normalizedEmail,
+      email: normalizedEmail,
+      provider: "email" as const,
+      createdAt: new Date().toISOString()
+    };
+    const nextProfiles = existingProfile
+      ? studentProfiles.map((profile) => (
+          profile.email.toLowerCase() === normalizedEmail ? { ...profile, zoomLink } : profile
+        ))
+      : [...studentProfiles, { ...nextProfile, zoomLink }];
+    setStudentProfiles(nextProfiles);
+  };
+
+  const updateLessonNoteDraft = (bookingId: string, note: string) => {
+    setLessonNoteDrafts({ ...lessonNoteDrafts, [bookingId]: note });
+  };
+
+  const sendLessonNote = async (booking: BookingRecord) => {
+    const note = (lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim();
+    if (!note) return;
+
+    const sent = await sendPlatformNotification({
+      name: booking.student,
+      email: booking.studentEmail,
+      inquiryType: "Learningレッスンノート",
+      subject: "レッスンノートをお送りします",
+      copyToRequester: true,
+      message: [
+        "レッスンノートをお送りします。",
+        "",
+        `予約ID: ${booking.id}`,
+        `レッスン: ${formatLessonKind(booking.lessonKind, "ja")}`,
+        `日時: ${formatDateTime(booking.requestedSlot)} (${booking.timezone})`,
+        "",
+        "レッスンノート:",
+        note
+      ].join("\n")
+    });
+
+    if (!sent) return;
+
+    setBookings((current) => current.map((item) => (
+      item.id === booking.id ? { ...item, reason: note, lessonNoteSent: true } : item
+    )));
+    const nextDrafts = { ...lessonNoteDrafts };
+    delete nextDrafts[booking.id];
+    setLessonNoteDrafts(nextDrafts);
+  };
+
+  const persistStudentZoomLink = async (summary: ReturnType<typeof buildStudentPackageSummary>, zoomLink: string) => {
+    try {
+      await fetch("/api/student-zoom-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          studentId: summary.studentId,
+          name: summary.name,
+          email: summary.email,
+          zoomLink
+        })
+      });
+    } catch (error) {
+      console.error("Student zoom link save failed.", {
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   };
 
   const toggleRecurringDay = (day: number) => {
@@ -1747,18 +1851,74 @@ function TutorAvailabilityPage({
 
         <section className="platform-card" id="student-package-summary">
           <h3>生徒別パッケージ一覧</h3>
+          <label className="student-search-field">
+            生徒検索
+            <input
+              value={studentSearch}
+              onChange={(event) => setStudentSearch(event.target.value)}
+              placeholder="StudentID / メール / 名前 / コース名"
+            />
+          </label>
           <div className="record-list">
-            {studentPackageSummaries.map((summary) => (
+            {filteredStudentPackageSummaries.map((summary) => (
               <article key={summary.email}>
                 <strong>{summary.name} / {summary.email}</strong>
                 <span>StudentID: {summary.studentId}</span>
                 <p>購入済: {summary.purchased}回 / 予約済: {summary.reserved}回 / 完了済: {summary.completed}回 / 未予約: {summary.unbooked}回</p>
-                <p>購入: {summary.packageLabel} / {formatDateTime(summary.purchasedAt)}</p>
+                <div className="purchase-history-list">
+                  <span>購入:</span>
+                  {summary.purchaseHistory.length > 0 ? summary.purchaseHistory.map((purchase) => (
+                    <p key={`${summary.email}-${purchase.packageLabel}-${purchase.purchasedAt}`}>
+                      {purchase.packageLabel} / {purchase.purchasedLessons}回 / 残{purchase.remainingLessons}回 / {formatDateTime(purchase.purchasedAt)}
+                    </p>
+                  )) : <p>未登録</p>}
+                </div>
+                <label className="zoom-link-editor">
+                  Zoomリンク
+                  <input
+                    type="url"
+                    value={summary.zoomLink}
+                    onChange={(event) => updateStudentZoomLink(summary.email, event.target.value)}
+                    onBlur={(event) => void persistStudentZoomLink(summary, event.target.value)}
+                    placeholder="https://zoom.us/j/..."
+                  />
+                </label>
+                {summary.zoomLink ? (
+                  <a className="button secondary" href={summary.zoomLink} target="_blank" rel="noreferrer">
+                    レッスンリンクを開く
+                  </a>
+                ) : null}
               </article>
             ))}
+            {filteredStudentPackageSummaries.length === 0 ? <p className="platform-muted">該当する生徒は見つかりません。</p> : null}
           </div>
         </section>
       </div>
+
+      <section className="platform-card platform-form">
+        <h3>レッスンノート未送信</h3>
+        <p className="platform-muted">完了済みレッスンのうち、レッスンノート送信が未完了のものを表示します。記載後に完了を押すと、生徒宛にメール送信されます。</p>
+        <div className="record-list">
+          {completedBookingsWithoutNotes.length > 0 ? completedBookingsWithoutNotes.map((booking) => (
+            <article key={booking.id} className="lesson-note-record">
+              <strong>{booking.id} / {booking.student}</strong>
+              <span>{formatLessonKind(booking.lessonKind, "ja")} / {formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
+              <label>
+                レッスンノート
+                <textarea
+                  value={lessonNoteDrafts[booking.id] ?? booking.reason ?? ""}
+                  rows={5}
+                  onChange={(event) => updateLessonNoteDraft(booking.id, event.target.value)}
+                  placeholder="生徒へ共有するレッスン内容、宿題、次回に向けたメモを入力"
+                />
+              </label>
+              <button className="button primary" type="button" onClick={() => void sendLessonNote(booking)} disabled={!(lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim()}>
+                完了
+              </button>
+            </article>
+          )) : <p className="platform-muted">レッスンノート未送信の完了レッスンはありません。</p>}
+        </div>
+      </section>
 
       <section className="platform-card platform-form">
         <h3>空き時間を登録</h3>
@@ -1907,6 +2067,11 @@ function TutorAvailabilityPage({
             <p>ステータス: <StatusBadge status={selectedTutorBooking.status} language="ja" /></p>
             <p>メール: {selectedTutorBooking.studentEmail}</p>
             <p>{formatPackageProgressForBooking(selectedTutorBooking, bookings, customer)}</p>
+            {selectedTutorBookingZoomLink ? (
+              <a className="button secondary" href={selectedTutorBookingZoomLink} target="_blank" rel="noreferrer">
+                レッスンリンクを開く
+              </a>
+            ) : null}
             <button className="button secondary" type="button" onClick={() => {
               document.getElementById("student-package-summary")?.scrollIntoView({ behavior: "smooth", block: "start" });
               setSelectedTutorBooking(null);
@@ -1974,6 +2139,9 @@ function StudentDashboard({
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
+  const [studentRequestTab, setStudentRequestTab] = useState<"change" | "contact">("change");
+  const [contactForm, setContactForm] = useState({ subject: "", message: "" });
+  const [contactMessage, setContactMessage] = useState("");
   const text = getStudentPageCopy(language);
 
   useEffect(() => {
@@ -2000,7 +2168,38 @@ function StudentDashboard({
       };
 
   const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
-  const packageSummary = buildStudentPackageSummary(activeCustomer.email, bookings, activeCustomer, activeProfile?.studentId);
+  const packageSummary = buildStudentPackageSummary(activeCustomer.email, bookings, activeCustomer, activeProfile?.studentId, activeProfile?.zoomLink);
+
+  const submitStudentContact = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!contactForm.message.trim()) {
+      setContactMessage(text.contactValidationError);
+      return;
+    }
+
+    const sent = await sendPlatformNotification({
+      name: activeCustomer.name,
+      email: activeCustomer.email,
+      inquiryType: "Learning生徒問い合わせ",
+      subject: "【生徒からの問い合わせ】",
+      message: [
+        "生徒から問い合わせが届きました。",
+        "",
+        `StudentID: ${packageSummary.studentId}`,
+        `生徒名: ${activeCustomer.name}`,
+        `メールアドレス: ${activeCustomer.email}`,
+        contactForm.subject.trim() ? `件名: ${contactForm.subject.trim()}` : "",
+        "",
+        "問い合わせ内容:",
+        contactForm.message.trim()
+      ].filter(Boolean).join("\n")
+    });
+
+    setContactMessage(sent ? text.contactSuccess : text.contactFailure);
+    if (sent) {
+      setContactForm({ subject: "", message: "" });
+    }
+  };
 
   const startGoogleAuth = async () => {
     setAuthProvider("google");
@@ -2093,7 +2292,8 @@ function StudentDashboard({
         name: loginName.trim() || nextEmail.split("@")[0],
         email: nextEmail,
         provider: authProvider,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        zoomLink: ""
       };
       if (!existingProfile) {
         setStudentProfiles([...studentProfiles, profile]);
@@ -2224,18 +2424,6 @@ function StudentDashboard({
         <KpiCard label={text.reservedLessons} value={text.lessonCount(packageSummary.reserved)} />
         <KpiCard label={text.purchasedLessons} value={text.lessonCount(packageSummary.purchased)} />
       </div>
-      {packageSummary.zoomLink ? (
-        <section className="platform-card lesson-link-card">
-          <div>
-            <p className="eyebrow">{text.lessonLinkTitle}</p>
-            <h3>{text.lessonLinkLead}</h3>
-          </div>
-          <a className="button secondary" href={packageSummary.zoomLink} target="_blank" rel="noreferrer">
-            {text.openLessonLink}
-          </a>
-        </section>
-      ) : null}
-
       <section className="platform-card">
         <h3>{text.bookingTimelineTitle}</h3>
         {visibleBookings.length > 0 ? (
@@ -2292,35 +2480,63 @@ function StudentDashboard({
           />
         </section>
 
-        <form className="platform-card platform-form" onSubmit={submitChangeRequest}>
-          <h3>{text.changeTitle}</h3>
-          <p className="platform-muted">{text.changeLead}</p>
-          {bookingMessage ? <p className="form-success">{bookingMessage}</p> : null}
-          <label>
-            {text.requestType}
-            <select value={changeRequest.type} onChange={(event) => setChangeRequest({ ...changeRequest, type: event.target.value as RequestChange["type"] })}>
-              <option value="reschedule_requested">{text.reschedule}</option>
-              <option value="cancel_requested">{text.cancel}</option>
-            </select>
-          </label>
-          <label>
-            {text.targetBooking}
-            <select value={changeRequest.bookingId} onChange={(event) => setChangeRequest({ ...changeRequest, bookingId: event.target.value })}>
-              {visibleBookings.map((booking) => (
-                <option key={booking.id} value={booking.id}>
-                  {booking.id} / {formatDateTime(booking.requestedSlot)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {text.reasonRequired}
-            <textarea value={changeRequest.reason} rows={5} onChange={(event) => setChangeRequest({ ...changeRequest, reason: event.target.value })} required />
-          </label>
-          <button className="button primary" type="submit" disabled={visibleBookings.length === 0}>
-            {text.changeSubmit}
-          </button>
-        </form>
+        <section className="platform-card platform-form">
+          <h3>{text.requestPanelTitle}</h3>
+          <div className="segmented-control" aria-label={text.requestPanelTitle}>
+            <button className={studentRequestTab === "change" ? "active" : ""} type="button" onClick={() => setStudentRequestTab("change")}>
+              {text.changeTab}
+            </button>
+            <button className={studentRequestTab === "contact" ? "active" : ""} type="button" onClick={() => setStudentRequestTab("contact")}>
+              {text.contactTab}
+            </button>
+          </div>
+          {studentRequestTab === "change" ? (
+            <form className="platform-form nested-form" onSubmit={submitChangeRequest}>
+              <p className="platform-muted">{text.changeLead}</p>
+              {bookingMessage ? <p className="form-success">{bookingMessage}</p> : null}
+              <label>
+                {text.requestType}
+                <select value={changeRequest.type} onChange={(event) => setChangeRequest({ ...changeRequest, type: event.target.value as RequestChange["type"] })}>
+                  <option value="reschedule_requested">{text.reschedule}</option>
+                  <option value="cancel_requested">{text.cancel}</option>
+                </select>
+              </label>
+              <label>
+                {text.targetBooking}
+                <select value={changeRequest.bookingId} onChange={(event) => setChangeRequest({ ...changeRequest, bookingId: event.target.value })}>
+                  {visibleBookings.map((booking) => (
+                    <option key={booking.id} value={booking.id}>
+                      {booking.id} / {formatDateTime(booking.requestedSlot)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {text.reasonRequired}
+                <textarea value={changeRequest.reason} rows={5} onChange={(event) => setChangeRequest({ ...changeRequest, reason: event.target.value })} required />
+              </label>
+              <button className="button primary" type="submit" disabled={visibleBookings.length === 0}>
+                {text.changeSubmit}
+              </button>
+            </form>
+          ) : (
+            <form className="platform-form nested-form" onSubmit={submitStudentContact}>
+              <p className="platform-muted">{text.contactLead}</p>
+              {contactMessage ? <p className={contactMessage === text.contactSuccess ? "form-success" : "form-error"}>{contactMessage}</p> : null}
+              <label>
+                {text.contactSubject}
+                <input value={contactForm.subject} onChange={(event) => setContactForm({ ...contactForm, subject: event.target.value })} />
+              </label>
+              <label>
+                {text.contactBody}
+                <textarea value={contactForm.message} rows={6} onChange={(event) => setContactForm({ ...contactForm, message: event.target.value })} required />
+              </label>
+              <button className="button primary" type="submit">
+                {text.contactSubmit}
+              </button>
+            </form>
+          )}
+        </section>
       </div>
 
       {selectedBooking ? (
@@ -2330,7 +2546,7 @@ function StudentDashboard({
             <p className="eyebrow">Booking Detail</p>
             <h3>{selectedBooking.id} / {formatDateTime(selectedBooking.requestedSlot)}</h3>
             <p>{getBookingCourseName(selectedBooking)}</p>
-            {packageSummary.zoomLink ? (
+            {packageSummary.zoomLink && !isPastBooking(selectedBooking.requestedSlot) ? (
               <a className="button secondary" href={packageSummary.zoomLink} target="_blank" rel="noreferrer">
                 {text.openLessonLink}
               </a>
@@ -2391,7 +2607,7 @@ function BookingCalendar({
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}
               {dayBookings.map((booking) => (
-                <button key={booking.id} className={`calendar-booking ${booking.status}`} type="button" onClick={() => onSelectBooking(booking)}>
+                <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
                   {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
                 </button>
               ))}
@@ -2416,12 +2632,12 @@ function BookingSummaryTile({
   const courseName = getBookingCourseName(booking);
 
   return (
-    <button className="booking-summary-tile" type="button" onClick={() => onSelect(booking)}>
+    <button className={`booking-summary-tile ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelect(booking)}>
       <span className="booking-summary-date">{formatDateTime(booking.requestedSlot)}</span>
       <strong>{courseName}</strong>
       <span>{formatLessonKind(booking.lessonKind, language)}</span>
       <span>{booking.timezone}</span>
-      <span>{text.statusLabel}: {formatBookingStatus(booking.status, language)}</span>
+      <span>{text.statusLabel}: {formatBookingDisplayStatus(booking, language)}</span>
     </button>
   );
 }
@@ -2581,6 +2797,25 @@ function formatBookingStatus(status: BookingStatus, language: PlatformLanguage) 
   return labels[language][status] ?? status;
 }
 
+function getBookingVisualState(booking: BookingRecord) {
+  if (booking.status === "approved" && isPastBooking(booking.requestedSlot)) return "completed";
+  if (booking.status === "approved") return "confirmed";
+  if (booking.status === "requested") return "pending";
+  return "pending";
+}
+
+function formatBookingDisplayStatus(booking: BookingRecord, language: PlatformLanguage) {
+  if (booking.status === "approved" && isPastBooking(booking.requestedSlot)) {
+    const labels: Record<PlatformLanguage, string> = {
+      ja: "完了",
+      en: "Completed",
+      "zh-Hant": "已完成"
+    };
+    return labels[language];
+  }
+  return formatBookingStatus(booking.status, language);
+}
+
 function StatusBadge({ status, language = "ja" }: { status: BookingStatus; language?: PlatformLanguage }) {
   return <span className={`status-badge ${status}`}>{formatBookingStatus(status, language)}</span>;
 }
@@ -2645,7 +2880,8 @@ function buildStudentProfileFromSupabaseUser(user: SupabaseUserLike, localProfil
     name: fallbackName,
     email,
     provider,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    zoomLink: ""
   };
 }
 
@@ -2662,7 +2898,8 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
       name: fallbackName,
       email,
       provider,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      zoomLink: ""
     };
   }
 
@@ -2695,7 +2932,8 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     name: String(body.profile.name || localProfile?.name || fallbackName),
     email: String(body.profile.email).toLowerCase(),
     provider: mapSupabaseProvider(body.profile.provider),
-    createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString())
+    createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString()),
+    zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || "")
   };
 }
 
@@ -2707,13 +2945,23 @@ function generateStudentId(profiles: StudentProfile[]) {
   return id;
 }
 
-function buildStudentPackageSummary(email: string, bookings: BookingRecord[], customer: CustomerRecord, studentId?: string) {
+function buildStudentPackageSummary(email: string, bookings: BookingRecord[], customer: CustomerRecord, studentId?: string, zoomLink?: string) {
   const credits = getStudentLessonCredits(email, customer);
   const purchased = credits.reduce((total, credit) => total + credit.purchasedLessons, 0);
   const completed = bookings.filter((booking) => booking.studentEmail.toLowerCase() === email.toLowerCase() && booking.status === "approved" && isPastBooking(booking.requestedSlot)).length;
   const reserved = bookings.filter((booking) => booking.studentEmail.toLowerCase() === email.toLowerCase() && booking.status === "approved" && !isPastBooking(booking.requestedSlot)).length;
   const unbooked = Math.max(0, purchased - completed - reserved);
   const primaryCredit = credits[0];
+  const purchaseHistory = credits
+    .slice()
+    .sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
+    .slice(0, 3)
+    .map((credit) => ({
+      packageLabel: credit.packageLabel,
+      purchasedLessons: credit.purchasedLessons,
+      remainingLessons: credit.remainingLessons,
+      purchasedAt: credit.purchasedAt
+    }));
 
   return {
     email,
@@ -2725,7 +2973,8 @@ function buildStudentPackageSummary(email: string, bookings: BookingRecord[], cu
     unbooked,
     packageLabel: primaryCredit?.packageLabel ?? "未登録",
     purchasedAt: primaryCredit?.purchasedAt ?? "",
-    zoomLink: primaryCredit?.zoomLink ?? ""
+    purchaseHistory,
+    zoomLink: zoomLink ?? ""
   };
 }
 
@@ -2733,7 +2982,7 @@ function buildStudentPackageSummaries(bookings: BookingRecord[], customer: Custo
   const emails = Array.from(new Set([customer.email, ...bookings.map((booking) => booking.studentEmail.toLowerCase())]));
   return emails.map((email) => {
     const profile = profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
-    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId);
+    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId, profile?.zoomLink);
   });
 }
 
@@ -2838,8 +3087,18 @@ function getStudentPageCopy(language: PlatformLanguage) {
       availabilityTitle: "講師空き時間カレンダー",
       availabilityLead: "講師が公開した候補枠のうち、まだ予約が入っていない枠だけを表示しています。枠をクリックすると、予約リクエストの希望日時に反映されます。",
       bookingCalendarTitle: "予約カレンダー",
+      requestPanelTitle: "連絡・各種リクエスト",
+      changeTab: "日程変更・キャンセル",
+      contactTab: "講師に問い合わせ",
       changeTitle: "日程変更・キャンセルリクエスト",
       changeLead: "予約確定後、日程変更やキャンセルが必要な場合は、理由を添えてリクエストを送信してください。内容確認後、メールでご案内します。",
+      contactLead: "レッスンや受講に関する問い合わせを講師へ送信できます。返信はメールでご案内します。",
+      contactSubject: "件名（任意）",
+      contactBody: "問い合わせ内容",
+      contactSubmit: "問い合わせを送信",
+      contactValidationError: "問い合わせ内容を入力してください。",
+      contactSuccess: "問い合わせを送信しました。講師よりメールでご案内します。",
+      contactFailure: "問い合わせを送信できませんでした。時間をおいて再度お試しください。",
       requestType: "リクエスト種別",
       reschedule: "日程変更",
       cancel: "キャンセル",
@@ -2915,8 +3174,18 @@ function getStudentPageCopy(language: PlatformLanguage) {
       availabilityTitle: "Tutor Availability Calendar",
       availabilityLead: "Only open tutor slots without existing bookings are shown. Click a slot to add it to your booking request.",
       bookingCalendarTitle: "Booking Calendar",
+      requestPanelTitle: "Contact and Requests",
+      changeTab: "Reschedule / Cancel",
+      contactTab: "Contact Tutor",
       changeTitle: "Reschedule / Cancellation Request",
       changeLead: "If you need to reschedule or cancel after your booking is confirmed, please send a request with the reason. Details will be shared by email after review.",
+      contactLead: "Send lesson-related questions to your tutor. The reply will be sent by email.",
+      contactSubject: "Subject (optional)",
+      contactBody: "Message",
+      contactSubmit: "Send Inquiry",
+      contactValidationError: "Please enter your message.",
+      contactSuccess: "Your inquiry has been sent. The tutor will reply by email.",
+      contactFailure: "Your inquiry could not be sent. Please try again later.",
       requestType: "Request type",
       reschedule: "Reschedule",
       cancel: "Cancel",
@@ -2992,8 +3261,18 @@ function getStudentPageCopy(language: PlatformLanguage) {
       availabilityTitle: "講師空?日?",
       availabilityLead: "僅顯示講師公開且尚未被預約的候選時段。點選時段後會加入預約申請。",
       bookingCalendarTitle: "預約日?",
+      requestPanelTitle: "聯絡與各種申請",
+      changeTab: "改期／取消",
+      contactTab: "聯絡講師",
       changeTitle: "改期／取消申請",
       changeLead: "預約確認後，如需改期或取消，請附上理由送出申請。確認後會以電子郵件通知。",
+      contactLead: "可將課程相關問題送給講師。回覆將以電子郵件通知。",
+      contactSubject: "主旨（選填）",
+      contactBody: "詢問內容",
+      contactSubmit: "送出詢問",
+      contactValidationError: "請輸入詢問內容。",
+      contactSuccess: "詢問已送出。講師將以電子郵件回覆。",
+      contactFailure: "詢問未能送出，請稍後再試。",
       requestType: "申請類型",
       reschedule: "改期",
       cancel: "取消",

@@ -25,6 +25,7 @@ type StudentRecord = {
   name: string | null;
   email: string;
   provider: string | null;
+  zoom_link?: string | null;
   created_at: string;
 };
 
@@ -59,7 +60,8 @@ function toProfile(record: StudentRecord) {
     name: record.name || record.email.split("@")[0],
     email: record.email.toLowerCase(),
     provider: record.provider === "google" ? "google" : "email",
-    createdAt: record.created_at
+    createdAt: record.created_at,
+    zoomLink: record.zoom_link || ""
   };
 }
 
@@ -135,7 +137,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
 
     const { data: existing, error: findError } = await serviceClient
       .from("students")
-      .select("student_id,name,email,provider,created_at")
+      .select("student_id,name,email,provider,zoom_link,created_at")
       .eq("email", email)
       .maybeSingle();
 
@@ -154,7 +156,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
           updated_at: new Date().toISOString()
         })
         .eq("email", email)
-        .select("student_id,name,email,provider,created_at")
+        .select("student_id,name,email,provider,zoom_link,created_at")
         .single();
 
       if (updateError) {
@@ -175,14 +177,14 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
         name,
         provider
       })
-      .select("student_id,name,email,provider,created_at")
+      .select("student_id,name,email,provider,zoom_link,created_at")
       .single();
 
     if (insertError) {
       if (insertError.code === "23505") {
         const { data: racedExisting } = await serviceClient
           .from("students")
-          .select("student_id,name,email,provider,created_at")
+          .select("student_id,name,email,provider,zoom_link,created_at")
           .eq("email", email)
           .maybeSingle();
 

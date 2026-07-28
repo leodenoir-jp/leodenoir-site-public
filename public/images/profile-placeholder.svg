@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100" viewBox="0 0 900 1100" role="img" aria-label="プロフィール画像プレースホルダー">
+  <rect width="900" height="1100" fill="#edf2f5"/>
+  <rect x="70" y="70" width="760" height="960" fill="#ffffff" stroke="#c9d3dc" stroke-width="3"/>
+  <circle cx="450" cy="390" r="150" fill="#c9d3dc"/>
+  <path d="M210 850c40-160 160-260 240-260s200 100 240 260" fill="#9cb6c8"/>
+  <path d="M210 850h480" stroke="#0b162a" stroke-width="8"/>
+  <text x="450" y="985" text-anchor="middle" fill="#4b5563" font-family="Arial, sans-serif" font-size="34">Profile image</text>
+</svg>

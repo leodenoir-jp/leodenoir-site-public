@@ -1,0 +1,46 @@
+export const siteConfig = {
+  siteName: "Leo de Noir｜Workaholic Owl 公式サイト",
+  brandName: "Leo de Noir",
+  officialName: "Leo de Noir / Workaholic Owl",
+  logoPath: "/images/ldn-logo.png",
+  organization: "Workaholic Owl",
+  operator: "請井 悠貴子",
+  url: "https://leodenoir.com",
+  contactEmail: "yu.leobiz003@outlook.com",
+  description:
+    "Leo de Noir / Workaholic Owl は、個人と組織が自分の役割を見つめ、自ら人生や働き方の舵を取るための、対話・教育・実務支援・表現活動の公式窓口です。",
+  snsLinks: [
+    {
+      label: "YouTube：Leo de Noir｜レオのよろず相談待合室",
+      media: "YouTube",
+      logoText: "YouTube",
+      logoPath: "/images/sns-youtube.png",
+      accountName: "Leo de Noir｜レオのよろず相談待合室",
+      url: "/external/youtube"
+    },
+    {
+      label: "Tiktok：れお[Leo de Noir運営者]",
+      media: "TikTok",
+      logoText: "TikTok",
+      logoPath: "/images/sns-tiktok.png",
+      accountName: "れお[Leo de Noir運営者]",
+      url: "/external/tiktok"
+    },
+    {
+      label: "note：leotimez",
+      media: "note",
+      logoText: "note",
+      logoPath: "/images/sns-note.png",
+      accountName: "leotimez",
+      url: "/external/note"
+    }
+  ],
+  navItems: [
+    { label: "TOP", href: "/" },
+    { label: "About Me", href: "/about" },
+    { label: "Services", href: "/services" },
+    { label: "Learning", href: "/learning" },
+    { label: "利用規約", href: "/terms" },
+    { label: "Contact", href: "/contact" }
+  ]
+};

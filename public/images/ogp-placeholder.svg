@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Leo de Noir OGP placeholder">
+  <rect width="1200" height="630" fill="#f7f9fc"/>
+  <rect x="80" y="80" width="1040" height="470" fill="#0b162a"/>
+  <path d="M145 470h910" stroke="#d8cbc0" stroke-width="2"/>
+  <path d="M145 400h340M145 438h500" stroke="#9cb6c8" stroke-width="12"/>
+  <text x="145" y="230" fill="#f7f9fc" font-family="Georgia, serif" font-size="70">Leo de Noir</text>
+  <text x="150" y="300" fill="#d8cbc0" font-family="Arial, sans-serif" font-size="30">Workaholic Owl Official Site</text>
+  <rect x="880" y="160" width="170" height="170" fill="none" stroke="#9cb6c8" stroke-width="4"/>
+  <rect x="920" y="200" width="170" height="170" fill="none" stroke="#d8cbc0" stroke-width="4"/>
+</svg>

@@ -94,6 +94,7 @@ type TutorAvailabilitySlot = {
 
 const storageKey = "ldn-platform-language";
 const studentEmailKey = "ldn-platform-student-email";
+const tutorSessionKey = "ldn-platform-tutor-session-email";
 const authPendingKey = "ldn-platform-auth-pending";
 const availabilityStorageKey = "ldn-platform-tutor-availability";
 const bookingsStorageKey = "ldn-platform-bookings";
@@ -400,6 +401,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     }
 
     const requestGroupLabel = bookingForm.recurringRequest || requestedSlots.length > 1 ? `定期予約候補 ${requestedSlots.length}枠` : "単発予約";
+    const menuDisplay = getMenuText(menu, "ja");
     const nextBookings: BookingRecord[] = requestedSlots.map((slot, index) => ({
       id: `BR-${Math.floor(2000 + Math.random() * 7000)}-${index + 1}`,
       student: nameForRequest,
@@ -410,7 +412,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       timezone: slot.timezone,
       status: "requested",
       reason: [
-        `${menu.name} / ${slot.deliveryMode === "online" ? "オンライン" : "対面"}`,
+        `${menuDisplay.category}：${menuDisplay.name} / ${slot.deliveryMode === "online" ? "オンライン" : "対面"}`,
         `${getSlotDurationMinutes(slot)}分`,
         requestGroupLabel,
         `候補枠: ${formatAvailabilityRange(slot)}`
@@ -634,6 +636,22 @@ function LearningHome({ route, language }: { route: Route; language: PlatformLan
         </div>
         <p className="platform-badge">Online / In-person</p>
       </div>
+      <div className="platform-grid two">
+        {lessonProducts.map((product) => {
+          const copy = product.copy[language];
+          return (
+            <article className="platform-card feature-card" key={product.kind}>
+              <img src={product.image} alt="" />
+              <p className="eyebrow">{copy.eyebrow}</p>
+              <h3>{copy.title}</h3>
+              <p>{copy.summary}</p>
+              <button className="button primary" type="button" onClick={() => route.navigate(product.path)}>
+                メニューを見る
+              </button>
+            </article>
+          );
+        })}
+      </div>
       <div className="platform-card">
         <p className="eyebrow">App Information</p>
         <h3>Leo de Noir / Workaholic Owl Learning Menu</h3>
@@ -659,22 +677,6 @@ function LearningHome({ route, language }: { route: Route; language: PlatformLan
           Googleユーザーデータを含む個人情報の取得、利用、保存、共有、削除については{" "}
           <a href="/privacy" onClick={(event) => handleNav(event, "/privacy", route.navigate)}>プライバシーポリシー</a>をご確認ください。
         </p>
-      </div>
-      <div className="platform-grid two">
-        {lessonProducts.map((product) => {
-          const copy = product.copy[language];
-          return (
-            <article className="platform-card feature-card" key={product.kind}>
-              <img src={product.image} alt="" />
-              <p className="eyebrow">{copy.eyebrow}</p>
-              <h3>{copy.title}</h3>
-              <p>{copy.summary}</p>
-              <button className="button primary" type="button" onClick={() => route.navigate(product.path)}>
-                メニューを見る
-              </button>
-            </article>
-          );
-        })}
       </div>
     </div>
   );
@@ -1507,7 +1509,8 @@ function TutorAvailabilityPage({
   reviews: LessonReview[];
   setReviews: (reviews: LessonReview[]) => void;
 }) {
-  const [loginEmail, setLoginEmail] = useState(studentEmail);
+  const [loginEmail, setLoginEmail] = useState(() => window.localStorage.getItem(tutorSessionKey) ?? tutorLoginPlaceholder);
+  const [tutorEmail, setTutorEmail] = useState(() => window.localStorage.getItem(tutorSessionKey) ?? "");
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
@@ -1542,7 +1545,7 @@ function TutorAvailabilityPage({
     note: "",
     weekdays: [1, 3, 5]
   });
-  const isOwner = studentEmail.toLowerCase() === ownerEmail;
+  const isOwner = tutorEmail.toLowerCase() === ownerEmail;
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
@@ -1569,8 +1572,8 @@ function TutorAvailabilityPage({
     event.preventDefault();
     const nextEmail = loginEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
-    setStudentEmail(nextEmail);
-    window.localStorage.setItem(studentEmailKey, nextEmail);
+    setTutorEmail(nextEmail);
+    window.localStorage.setItem(tutorSessionKey, nextEmail);
   };
 
   const addAvailabilitySlot = (event: FormEvent<HTMLFormElement>) => {
@@ -1816,7 +1819,7 @@ function TutorAvailabilityPage({
           <p>空き枠、予約リクエスト、受講者ごとのパッケージ状況を確認できます。</p>
         </div>
         <div className="student-session">
-          <p className="platform-badge">{studentEmail}</p>
+          <p className="platform-badge">{tutorEmail}</p>
         </div>
       </div>
 
@@ -2636,13 +2639,13 @@ function BookingSummaryTile({
   onSelect: (booking: BookingRecord) => void;
 }) {
   const text = getStudentPageCopy(language);
-  const courseName = getBookingCourseName(booking);
+  const lessonTitle = formatLessonKind(booking.lessonKind, language);
+  const courseName = getBookingCourseName(booking, language);
 
   return (
     <button className={`booking-summary-tile ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelect(booking)}>
       <span className="booking-summary-date">{formatDateTime(booking.requestedSlot)}</span>
-      <strong>{courseName}</strong>
-      <span>{formatLessonKind(booking.lessonKind, language)}</span>
+      <strong>{lessonTitle} / {courseName}</strong>
       <span>{booking.timezone}</span>
       <span>{text.statusLabel}: {formatBookingDisplayStatus(booking, language)}</span>
     </button>
@@ -3008,9 +3011,13 @@ function formatPackageProgressForBooking(booking: BookingRecord, bookings: Booki
   return `購入パッケージ総数 ${purchased}回中 ${getBookingSequenceNumber(booking, bookings)}回目`;
 }
 
-function getBookingCourseName(booking: BookingRecord) {
+function getBookingCourseName(booking: BookingRecord, language: PlatformLanguage = "ja") {
   const firstDetail = booking.reason?.split(" / ")[0]?.trim();
-  return firstDetail || formatLessonKind(booking.lessonKind, "ja");
+  if (firstDetail && !firstDetail.startsWith("完了済みレッスン")) return firstDetail;
+  const fallbackMenu = getLessonMenus(booking.lessonKind)[0];
+  if (!fallbackMenu) return formatLessonKind(booking.lessonKind, language);
+  const display = getMenuText(fallbackMenu, language);
+  return `${display.category}：${display.name}`;
 }
 
 function findOverlappingBookings(target: BookingRecord, bookings: BookingRecord[]) {

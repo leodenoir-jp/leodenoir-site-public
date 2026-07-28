@@ -2566,53 +2566,37 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     };
   }
 
-  const { data: existing } = await supabase
-    .from("students")
-    .select("student_id,name,email,provider,created_at")
-    .or(`auth_user_id.eq.${user.id},email.eq.${email}`)
-    .maybeSingle();
-
-  if (existing?.email && existing?.student_id) {
-    return {
-      studentId: String(existing.student_id),
-      name: String(existing.name || fallbackName),
-      email: String(existing.email).toLowerCase(),
-      provider: mapSupabaseProvider(existing.provider),
-      createdAt: String(existing.created_at || new Date().toISOString())
-    };
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (sessionError || !accessToken) {
+    throw new Error(sessionError?.message || "Supabase session token was not found.");
   }
 
-  const nextProfile: StudentProfile = {
-    studentId: localProfile?.studentId ?? generateStudentId(localProfiles),
-    name: localProfile?.name ?? fallbackName,
-    email,
-    provider,
-    createdAt: new Date().toISOString()
-  };
-
-  const { data: inserted, error } = await supabase
-    .from("students")
-    .insert({
-      auth_user_id: user.id,
-      student_id: nextProfile.studentId,
-      email: nextProfile.email,
-      name: nextProfile.name,
-      provider: nextProfile.provider
+  const response = await fetch("/api/student-profile", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: JSON.stringify({
+      name: localProfile?.name ?? fallbackName,
+      provider
     })
-    .select("student_id,name,email,provider,created_at")
-    .single();
+  });
 
-  if (!error && inserted?.email && inserted?.student_id) {
-    return {
-      studentId: String(inserted.student_id),
-      name: String(inserted.name || nextProfile.name),
-      email: String(inserted.email).toLowerCase(),
-      provider: mapSupabaseProvider(inserted.provider),
-      createdAt: String(inserted.created_at || nextProfile.createdAt)
-    };
+  const body = await response.json().catch(() => ({})) as { profile?: Partial<StudentProfile>; message?: string };
+  if (!response.ok || !body.profile?.email || !body.profile?.studentId) {
+    throw new Error(body.message || "Student profile sync failed.");
   }
 
-  return nextProfile;
+  return {
+    studentId: String(body.profile.studentId),
+    name: String(body.profile.name || localProfile?.name || fallbackName),
+    email: String(body.profile.email).toLowerCase(),
+    provider: mapSupabaseProvider(body.profile.provider),
+    createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString())
+  };
 }
 
 function generateStudentId(profiles: StudentProfile[]) {

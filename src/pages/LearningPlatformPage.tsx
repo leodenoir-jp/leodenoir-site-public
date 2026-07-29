@@ -137,6 +137,7 @@ type PlatformNotification = {
   copySubject?: string;
   copyMessage?: string;
   recipientGroup?: "default" | "purchase";
+  displayLanguage?: PlatformLanguage;
 };
 
 async function sendPlatformNotification({
@@ -148,7 +149,8 @@ async function sendPlatformNotification({
   copyToRequester,
   copySubject,
   copyMessage,
-  recipientGroup
+  recipientGroup,
+  displayLanguage
 }: PlatformNotification) {
   try {
     const response = await fetch("/api/contact", {
@@ -167,7 +169,8 @@ async function sendPlatformNotification({
         copyToRequester,
         copySubject,
         copyMessage,
-        recipientGroup
+        recipientGroup,
+        displayLanguage
       })
     });
 
@@ -425,6 +428,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       name: nameForRequest,
       email: emailForRequest,
       inquiryType: "Learning予約リクエスト",
+      displayLanguage: language,
       message: [
         "Learningページから予約リクエストが送信されました。",
         "",
@@ -483,6 +487,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       name: booking?.student ?? "Student",
       email: booking?.studentEmail ?? studentEmail,
       inquiryType: "Learning日程変更・キャンセルリクエスト",
+      displayLanguage: language,
       message: [
         `Learningページから${requestLabel}リクエストが送信されました。`,
         "",
@@ -546,6 +551,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
             />
           ) : mode === "tutor" ? (
             <TutorAvailabilityPage
+              language={language}
               bookings={bookings}
               setBookings={setBookings}
               customer={customer}
@@ -1053,6 +1059,7 @@ function PurchaseDialog({
       copyToRequester: true,
       copySubject: "購入リクエストを受け付けました",
       copyMessage: requesterCopy,
+      displayLanguage: language,
       message: [
         "Learningページから購入希望内容が送信されました。",
         "",
@@ -1485,6 +1492,7 @@ function ReviewCard({ review }: { review: LessonReview }) {
 }
 
 function TutorAvailabilityPage({
+  language,
   bookings,
   setBookings,
   customer,
@@ -1497,6 +1505,7 @@ function TutorAvailabilityPage({
   reviews,
   setReviews
 }: {
+  language: PlatformLanguage;
   bookings: BookingRecord[];
   setBookings: (bookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => void;
   customer: CustomerRecord;
@@ -1631,6 +1640,7 @@ function TutorAvailabilityPage({
       inquiryType: "Learningレッスンノート",
       subject: "レッスンノートをお送りします",
       copyToRequester: true,
+      displayLanguage: language,
       message: [
         "レッスンノートをお送りします。",
         "",
@@ -1734,6 +1744,7 @@ function TutorAvailabilityPage({
       inquiryType: "Learning予約完了通知",
       subject: "レッスン予約が確定しました",
       copyToRequester: true,
+      displayLanguage: language,
       message: [
         "レッスン予約が確定しました。",
         "",
@@ -1753,6 +1764,7 @@ function TutorAvailabilityPage({
         email: ownerEmail,
         inquiryType: "Learning予約枠重複アラート",
         subject: "予約枠の重複を検知しました",
+        displayLanguage: language,
         message: [
           "予約承認時に、同一時間帯の予約重複を検知しました。",
           "",
@@ -1781,6 +1793,7 @@ function TutorAvailabilityPage({
       inquiryType: "Learning予約リクエスト確認結果",
       subject: "レッスン予約リクエストについて",
       copyToRequester: true,
+      displayLanguage: language,
       message: [
         "お送りいただいたレッスン予約リクエストについて、今回は日程確定を見送らせていただきました。",
         "",
@@ -2197,6 +2210,7 @@ function StudentDashboard({
       email: activeCustomer.email,
       inquiryType: "Learning生徒問い合わせ",
       subject: "【生徒からの問い合わせ】",
+      displayLanguage: language,
       message: [
         "生徒から問い合わせが届きました。",
         "",

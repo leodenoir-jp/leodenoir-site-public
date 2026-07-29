@@ -11,7 +11,6 @@ type ContactResponse = {
   setHeader: (name: string, value: string) => void;
   status: (code: number) => {
     json: (body: unknown) => void;
-    end: (body?: string) => void;
   };
 };
 
@@ -26,6 +25,7 @@ type ContactPayload = {
   copySubject?: unknown;
   copyMessage?: unknown;
   recipientGroup?: unknown;
+  displayLanguage?: unknown;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,11 +56,26 @@ function normalizeBody(body: unknown): ContactPayload {
     }
   }
 
-  if (body && typeof body === "object") {
-    return body as ContactPayload;
-  }
-
+  if (body && typeof body === "object") return body as ContactPayload;
   return {};
+}
+
+function formatDisplayLanguage(value: string) {
+  const labels: Record<string, string> = {
+    ja: "日本語",
+    en: "English",
+    "zh-Hant": "繁體中文"
+  };
+
+  return labels[value] ?? value || "未指定";
+}
+
+function renderEmailHtml(content: string) {
+  return `
+    <div style="font-family: 'Yu Gothic', '游ゴシック', YuGothic, 'Hiragino Kaku Gothic ProN', Meiryo, Arial, sans-serif; color: #111827; line-height: 1.75; font-size: 15px;">
+      ${content}
+    </div>
+  `;
 }
 
 async function sendResendEmail({
@@ -133,6 +148,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const copySubject = toText(body.copySubject);
   const copyMessage = toText(body.copyMessage);
   const recipientGroup = toText(body.recipientGroup);
+  const displayLanguage = formatDisplayLanguage(toText(body.displayLanguage));
 
   if (!name || !email || !inquiryType || !message) {
     return res.status(400).json({ message: "Required fields are missing." });
@@ -145,6 +161,8 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const recipientEmail = recipientGroup === "purchase"
     ? (process.env.PURCHASE_TO_EMAIL || toEmail)
     : toEmail;
+  const ownerRecipient = recipientEmail.toLowerCase() === toEmail.toLowerCase()
+    || recipientEmail.toLowerCase() === "yu.leobiz003@outlook.com";
   const subject = requestedSubject || "お問い合わせがありました";
   const text = [
     "公式サイトから通知がありました。",
@@ -153,12 +171,13 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     `メールアドレス: ${email}`,
     `法人/個人: ${clientType || "未選択"}`,
     `種別: ${inquiryType}`,
+    ownerRecipient ? `表示言語: ${displayLanguage}` : "",
     "",
     "内容:",
     message
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 
-  const html = `
+  const html = renderEmailHtml(`
     <p>公式サイトから通知がありました。</p>
     <dl>
       <dt>名前</dt>
@@ -169,10 +188,11 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
       <dd>${escapeHtml(clientType || "未選択")}</dd>
       <dt>種別</dt>
       <dd>${escapeHtml(inquiryType)}</dd>
+      ${ownerRecipient ? `<dt>表示言語</dt><dd>${escapeHtml(displayLanguage)}</dd>` : ""}
     </dl>
     <p><strong>内容</strong></p>
     <p>${escapeHtml(message).replace(/\n/g, "<br />")}</p>
-  `;
+  `);
 
   try {
     await sendResendEmail({
@@ -195,7 +215,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
           replyTo: recipientEmail,
           subject: copySubject || subject,
           text: requesterText,
-          html: `<p>${escapeHtml(requesterText).replace(/\n/g, "<br />")}</p>`
+          html: renderEmailHtml(`<p>${escapeHtml(requesterText).replace(/\n/g, "<br />")}</p>`)
         });
       } catch (error) {
         console.error("Requester copy email failed.", {

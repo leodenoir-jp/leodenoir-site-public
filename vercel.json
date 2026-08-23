@@ -1,11 +1,6 @@
 {
   "redirects": [
     {
-      "source": "/external/personal-counseling",
-      "destination": "https://timerex.net/s/lom.leo39081_a90e/a24ea840/",
-      "permanent": false
-    },
-    {
       "source": "/external/online-japanese-lesson",
       "destination": "https://jp.amazingtalker.com/teachers-and-tutors/yui-usami",
       "permanent": false
@@ -35,6 +30,12 @@
     {
       "source": "/((?!api/|assets/|images/|favicon.svg).*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/counseling-reminders",
+      "schedule": "0 * * * *"
     }
   ]
 }

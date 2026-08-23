@@ -1993,6 +1993,281 @@ textarea {
   margin: 0 0 14px;
 }
 
+.counseling-hero img {
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  object-fit: cover;
+  width: 100%;
+}
+
+.counseling-booking-section {
+  background: #f7f9fc;
+}
+
+.counseling-booking-layout {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  min-width: 0;
+}
+
+.counseling-booking-layout > *,
+.counseling-calendar,
+.counseling-calendar-card,
+.counseling-guidance,
+.counseling-request-form {
+  min-width: 0;
+}
+
+.counseling-guidance {
+  grid-row: span 2;
+}
+
+.counseling-guidance h2,
+.counseling-calendar-card h2,
+.counseling-request-form h2,
+.counseling-admin-hero h1,
+.counseling-admin-login h1 {
+  color: var(--navy);
+}
+
+.counseling-guidance p {
+  white-space: pre-line;
+}
+
+.counseling-policy-box {
+  background: #f8efe7;
+  border: 1px solid #dfc4aa;
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.counseling-calendar .calendar-cell {
+  min-height: 96px;
+}
+
+.counseling-request-form .button {
+  justify-self: start;
+}
+
+.required-label {
+  color: #8c4a4a;
+  font-size: 12px;
+}
+
+.counseling-consent {
+  align-items: center;
+  display: flex !important;
+  gap: 10px !important;
+}
+
+.counseling-consent input[type="checkbox"] {
+  flex: 0 0 auto;
+  height: 22px;
+  min-height: 22px;
+  width: 22px;
+}
+
+.counseling-admin-login {
+  background: #f7f9fc;
+  min-height: 60vh;
+}
+
+.counseling-admin-login .login-card {
+  margin: 0 auto;
+  max-width: 560px;
+}
+
+.counseling-admin-tabs {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 24px rgba(11, 22, 42, 0.08);
+  backdrop-filter: blur(14px);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  left: 50%;
+  padding: 8px;
+  position: fixed;
+  top: 76px;
+  transform: translateX(-50%);
+  width: min(1120px, calc(100% - 40px));
+  z-index: 30;
+}
+
+.counseling-admin-stack {
+  padding-top: 78px;
+}
+
+.counseling-admin-stack .form-success,
+.counseling-admin-stack .form-error {
+  margin-top: 0;
+}
+
+.counseling-admin-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.counseling-admin-tabs button.active {
+  background: #edf4f7;
+  border-color: var(--line);
+  color: var(--navy);
+}
+
+.counseling-admin-calendar {
+  margin-top: 16px;
+}
+
+.counseling-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.counseling-calendar-legend span {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.counseling-calendar-legend i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.counseling-calendar-legend i.available {
+  background: var(--blue);
+}
+
+.counseling-calendar-legend i.counseling {
+  background: #00a99d;
+}
+
+.counseling-calendar-legend i.learning {
+  background: #c08855;
+}
+
+.calendar-booking.counseling-reserved {
+  background: #e9f6f5;
+  border-color: #96d6d0;
+  border-left-color: #00a99d;
+  cursor: default;
+}
+
+.calendar-booking.learning-reserved {
+  background: #f8efe7;
+  border-color: #dfc4aa;
+  border-left-color: #c08855;
+  cursor: default;
+}
+
+.counseling-appointment-list {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.counseling-appointment {
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--blue);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.counseling-appointment.confirmed {
+  border-left-color: #00a99d;
+}
+
+.counseling-appointment.cancelled,
+.counseling-appointment.counselor_cancelled {
+  border-left-color: #8c4a4a;
+  opacity: 0.78;
+}
+
+.counseling-appointment-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.counseling-appointment-head div {
+  display: grid;
+  gap: 4px;
+}
+
+.counseling-cancel-control {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.counseling-weekly-grid {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  overflow: hidden;
+}
+
+.counseling-weekly-row {
+  align-items: center;
+  border-bottom: 1px solid var(--soft-line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(100px, 1fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr);
+  padding: 12px 14px;
+}
+
+.counseling-weekly-row:last-child {
+  border-bottom: 0;
+}
+
+.counseling-weekly-row input {
+  min-height: 42px;
+}
+
+.counseling-override-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.counseling-override-list span {
+  align-items: center;
+  background: #edf4f7;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 8px;
+  padding: 7px 10px;
+}
+
+.counseling-override-list button {
+  background: transparent;
+  border: 0;
+  color: var(--navy);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 3px;
+}
+
 .modal-close {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2204,6 +2479,14 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .counseling-booking-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .counseling-guidance {
+    grid-row: auto;
+  }
+
   .hero-inner {
     min-height: auto;
     padding: 74px 0;
@@ -2312,7 +2595,10 @@ textarea {
   }
 
   .booking-calendar {
+    max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
+    width: 100%;
   }
 
   .platform-switcher {
@@ -2345,5 +2631,16 @@ textarea {
 
   .legal-body {
     padding: 24px;
+  }
+
+  .counseling-cancel-control,
+  .counseling-weekly-row,
+  .counseling-override-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .counseling-appointment-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

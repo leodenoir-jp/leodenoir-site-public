@@ -29,6 +29,7 @@ type ContactPayload = {
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const defaultLearningTutorEmail = "yu.leobiz003@outlook.com";
 
 function toText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -67,7 +68,7 @@ function formatDisplayLanguage(value: string) {
     "zh-Hant": "繁體中文"
   };
 
-  return labels[value] ?? value || "未指定";
+  return labels[value] ?? (value || "未指定");
 }
 
 function renderEmailHtml(content: string) {
@@ -129,14 +130,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   }
 
   const resendApiKey = process.env.RESEND_API_KEY;
-  const toEmail = process.env.CONTACT_TO_EMAIL;
   const fromEmail = process.env.CONTACT_FROM_EMAIL;
-
-  if (!resendApiKey || !toEmail || !fromEmail) {
-    console.error("Contact API configuration error: required mail environment variables are missing.");
-    return res.status(500).json({ message: "Mail environment variables are not configured." });
-  }
-
   const body = normalizeBody(req.body);
   const name = toText(body.name);
   const email = toText(body.email);
@@ -149,6 +143,9 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const copyMessage = toText(body.copyMessage);
   const recipientGroup = toText(body.recipientGroup);
   const displayLanguage = formatDisplayLanguage(toText(body.displayLanguage));
+  const contactToEmail = process.env.CONTACT_TO_EMAIL;
+  const purchaseToEmail = process.env.PURCHASE_TO_EMAIL;
+  const learningTutorEmail = process.env.LEARNING_TUTOR_TO_EMAIL || defaultLearningTutorEmail;
 
   if (!name || !email || !inquiryType || !message) {
     return res.status(400).json({ message: "Required fields are missing." });
@@ -159,10 +156,30 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   }
 
   const recipientEmail = recipientGroup === "purchase"
-    ? (process.env.PURCHASE_TO_EMAIL || toEmail)
-    : toEmail;
-  const ownerRecipient = recipientEmail.toLowerCase() === toEmail.toLowerCase()
-    || recipientEmail.toLowerCase() === "yu.leobiz003@outlook.com";
+    ? (purchaseToEmail || contactToEmail)
+    : recipientGroup === "learningTutor"
+      ? learningTutorEmail
+      : contactToEmail;
+
+  if (!resendApiKey || !recipientEmail || !fromEmail) {
+    console.error("Contact API configuration error: required mail environment variables are missing.", {
+      recipientGroup: recipientGroup || "default",
+      hasResendApiKey: Boolean(resendApiKey),
+      hasRecipientEmail: Boolean(recipientEmail),
+      hasFromEmail: Boolean(fromEmail)
+    });
+    return res.status(500).json({ message: "Mail environment variables are not configured." });
+  }
+
+  if (!emailPattern.test(recipientEmail)) {
+    console.error("Contact API configuration error: recipient email address is invalid.", {
+      recipientGroup: recipientGroup || "default"
+    });
+    return res.status(500).json({ message: "Recipient email address is invalid." });
+  }
+
+  const ownerRecipient = recipientEmail.toLowerCase() === defaultLearningTutorEmail
+    || (contactToEmail ? recipientEmail.toLowerCase() === contactToEmail.toLowerCase() : false);
   const subject = requestedSubject || "お問い合わせがありました";
   const text = [
     "公式サイトから通知がありました。",

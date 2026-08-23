@@ -161,12 +161,35 @@ Student Page のサインイン / サインアップは、Supabase Auth に接�
 1. Supabaseでプロジェクトを作成します。
 2. `supabase/schema.sql` を Supabase SQL Editor で実行します。
 3. Supabase Auth の Redirect URL に以下を追加します。
-   - `http://127.0.0.1:5173/platform`
-   - `https://leodenoir.com/platform`
+   - `http://127.0.0.1:5173/learning/student`
+   - `https://leodenoir.com/learning/student`
+   - `http://127.0.0.1:5173/counseling/admin`
+   - `https://leodenoir.com/counseling/admin`
 4. Googleサインインを使う場合は、Supabase Auth Providers でGoogleを有効化します。Emailリンク認証もSupabase AuthのEmail設定で有効化します。
 5. Vercelの Project Settings → Environment Variables に以下を設定します。
    - `VITE_SUPABASE_URL`: Supabase Project URL
    - `VITE_SUPABASE_ANON_KEY`: Supabase anon public key
    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
+   - `RESEND_API_KEY`: StudentID登録・サインインリンク送信用のResend APIキー
+   - `CONTACT_FROM_EMAIL`: Resendで認証済みの送信元メールアドレス
+   - `STUDENT_AUTH_FROM_EMAIL`: Student認証メール専用の送信元メールアドレス。未設定時は `CONTACT_FROM_EMAIL` を使用
 
 `SUPABASE_SERVICE_ROLE_KEY` はサーバー側だけで使用します。GitHub、フロントエンドコード、公開ページには記載しないでください。
+
+## 個別カウンセリング予約
+
+- 公開予約ページ: `/counseling/booking`
+- カウンセラー専用ページ: `/counseling/admin`
+- API: `/api/counseling`
+- 18時間前リマインド: `/api/counseling-reminders`
+
+初回反映時は、更新後の `supabase/schema.sql` をSupabase SQL Editorで実行してください。カウンセリングのクライエント、予約、案内文、受付設定、Learningと共通の予約占有を保存するテーブルが追加されます。
+
+VercelのEnvironment Variablesには、既存のメール・Supabase変数に加えて以下を設定します。
+
+- `COUNSELING_FROM_EMAIL`: Resendで認証済みの送信元メールアドレス。未設定時は `CONTACT_FROM_EMAIL` を使用
+- `CRON_SECRET`: 十分に長いランダム文字列。Vercel Cronからのリマインド実行を検証するために使用
+
+Supabase Authのメールアドレスは認証メール用です。予約通知・決済案内・リマインドのような任意のトランザクションメールは、既存のResend送信基盤を使用します。`COUNSELING_FROM_EMAIL` にはResendで認証した独自ドメインの送信元を設定してください。
+
+`vercel.json` のリマインドCronは1時間ごとに実行します。Vercel HobbyプランではCronの実行頻度に制約があるため、開始約18時間前の通知を安定運用する場合は、時間単位のCronを利用できるプラン、または同等の外部スケジューラが必要です。

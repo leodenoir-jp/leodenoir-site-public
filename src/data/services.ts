@@ -274,7 +274,7 @@ export const services: Service[] = [
     price: "50分 9,000円",
     summary: "誰にも話せなかった想いや言葉にしきれない感情を、対話を通して整理します。",
     image: "/images/service_personal-counseling.png",
-    externalUrl: "/external/personal-counseling",
+    externalUrl: "/counseling/booking",
     catchCopy: "誰にも話せなかった想いを、安心できる場所で。思考をほどき、次の一歩を一緒に整理します。",
     overview: [
       "個別カウンセリングは、今抱えている不安や悩み、言葉にしきれない感情を、対話を通して整理していく一対一のセッションです。",

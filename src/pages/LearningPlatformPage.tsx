@@ -92,6 +92,14 @@ type TutorAvailabilitySlot = {
   note: string;
 };
 
+type SharedScheduleReservation = {
+  starts_at: string;
+  ends_at: string;
+  source_type: "learning" | "counseling";
+  source_id: string;
+  status: "active" | "cancelled";
+};
+
 const storageKey = "ldn-platform-language";
 const studentEmailKey = "ldn-platform-student-email";
 const tutorSessionKey = "ldn-platform-tutor-session-email";
@@ -136,7 +144,7 @@ type PlatformNotification = {
   copyToRequester?: boolean;
   copySubject?: string;
   copyMessage?: string;
-  recipientGroup?: "default" | "purchase";
+  recipientGroup?: "default" | "purchase" | "learningTutor";
   displayLanguage?: PlatformLanguage;
 };
 
@@ -174,6 +182,54 @@ async function sendPlatformNotification({
       })
     });
 
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function getSupabaseAccessToken() {
+  const supabase = getSupabaseClient();
+  if (!supabase) return "";
+  const result = await supabase.auth.getSession();
+  return result.data.session?.access_token ?? "";
+}
+
+async function syncLearningScheduleReservations(bookings: BookingRecord[], slots: TutorAvailabilitySlot[]) {
+  try {
+    const token = await getSupabaseAccessToken();
+    if (!token) return "skipped" as const;
+    const response = await fetch("/api/counseling", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: "sync-learning",
+        reservations: bookings.map((booking, index) => ({
+          sourceId: booking.id,
+          start: booking.requestedSlot,
+          durationMinutes: getSlotDurationMinutes(slots[index])
+        }))
+      })
+    });
+    if (response.status === 409) return "conflict" as const;
+    return response.ok ? "synced" as const : "failed" as const;
+  } catch {
+    return "failed" as const;
+  }
+}
+
+async function updateLearningScheduleReservation(sourceId: string, active: boolean) {
+  try {
+    const token = await getSupabaseAccessToken();
+    if (!token) return false;
+    const response = await fetch("/api/counseling", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "update-learning", sourceId, active })
+    });
     return response.ok;
   } catch {
     return false;
@@ -256,6 +312,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       return initialAvailabilitySlots;
     }
   });
+  const [sharedAvailabilitySlots, setSharedAvailabilitySlots] = useState<TutorAvailabilitySlot[]>([]);
+  const [sharedReservations, setSharedReservations] = useState<SharedScheduleReservation[]>([]);
   const [changeRequest, setChangeRequest] = useState<RequestChange>({
     bookingId: demoBookings[0]?.id ?? "",
     type: "reschedule_requested",
@@ -265,6 +323,49 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   const mode = getMode(route.path);
   const selectedProduct = lessonProducts.find((product) => route.path.endsWith(product.kind)) ?? lessonProducts[0];
   const supabaseAvailable = isSupabaseConfigured();
+
+  useEffect(() => {
+    let mounted = true;
+    const loadSharedSchedule = async () => {
+      try {
+        const [availabilityResponse, occupancyResponse] = await Promise.all([
+          fetch("/api/counseling?mode=availability", { headers: { Accept: "application/json" } }),
+          fetch("/api/counseling?mode=occupancy", { headers: { Accept: "application/json" } })
+        ]);
+        if (!availabilityResponse.ok || !occupancyResponse.ok) return;
+        if (!availabilityResponse.headers.get("content-type")?.includes("application/json")) return;
+        if (!occupancyResponse.headers.get("content-type")?.includes("application/json")) return;
+        const availabilityBody = await availabilityResponse.json() as { slots?: Array<{ id: string; start: string; timezone: string }> };
+        const occupancyBody = await occupancyResponse.json() as { reservations?: SharedScheduleReservation[] };
+        if (!mounted) return;
+        setSharedAvailabilitySlots((availabilityBody.slots ?? []).map((slot) => ({
+          id: `SHARED-${slot.id}`,
+          start: slot.start,
+          end: new Date(new Date(slot.start).getTime() + 50 * 60_000).toISOString(),
+          timezone: slot.timezone,
+          deliveryMode: "online",
+          note: "共通オンライン候補枠"
+        })));
+        setSharedReservations(occupancyBody.reservations ?? []);
+      } catch (error) {
+        console.error("Shared schedule lookup failed.", {
+          message: error instanceof Error ? error.message : "Unknown error"
+        });
+      }
+    };
+    void loadSharedSchedule();
+    return () => { mounted = false; };
+  }, []);
+
+  const bookableAvailabilitySlots = useMemo(() => {
+    const combined = [...availabilitySlots, ...sharedAvailabilitySlots];
+    const unique = Array.from(new Map(combined.map((slot) => [`${new Date(slot.start).toISOString()}-${slot.deliveryMode}`, slot])).values());
+    return unique.filter((slot) => !sharedReservations.some((reservation) => (
+      reservation.status === "active"
+      && new Date(slot.start).getTime() < new Date(reservation.ends_at).getTime()
+      && new Date(slot.end).getTime() > new Date(reservation.starts_at).getTime()
+    )));
+  }, [availabilitySlots, sharedAvailabilitySlots, sharedReservations]);
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -423,6 +524,12 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       approvalGate: "tutor",
       creditAction: "hold"
     }));
+
+    const scheduleSync = await syncLearningScheduleReservations(nextBookings, requestedSlots);
+    if (scheduleSync === "conflict") {
+      setBookingMessage("選択した候補枠は、別の予約により受付できなくなりました。カレンダーを再読み込みして別の日時をお選びください。");
+      return;
+    }
 
     const notificationSent = await sendPlatformNotification({
       name: nameForRequest,
@@ -591,7 +698,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               setChangeRequest={setChangeRequest}
               submitChangeRequest={submitChangeRequest}
               bookingMessage={bookingMessage}
-              availabilitySlots={availabilitySlots}
+              availabilitySlots={bookableAvailabilitySlots}
               supabaseAvailable={supabaseAvailable}
               authStatus={authStatus}
               authStatusMessage={authStatusMessage}
@@ -1737,6 +1844,7 @@ function TutorAvailabilityPage({
         : item
     ));
     setBookings(nextBookings);
+    void updateLearningScheduleReservation(booking.id, true);
 
     await sendPlatformNotification({
       name: booking.student,
@@ -1786,6 +1894,7 @@ function TutorAvailabilityPage({
         ? { ...item, status: "cancelled" as BookingStatus, approvalGate: "none" as const, creditAction: "restored" as const }
         : item
     )));
+    void updateLearningScheduleReservation(booking.id, false);
 
     await sendPlatformNotification({
       name: booking.student,
@@ -2170,6 +2279,7 @@ function StudentDashboard({
   const [studentRequestTab, setStudentRequestTab] = useState<"change" | "contact">("change");
   const [contactForm, setContactForm] = useState({ subject: "", message: "" });
   const [contactMessage, setContactMessage] = useState("");
+  const [contactSubmitting, setContactSubmitting] = useState(false);
   const text = getStudentPageCopy(language);
 
   useEffect(() => {
@@ -2205,11 +2315,32 @@ function StudentDashboard({
       return;
     }
 
+    setContactSubmitting(true);
+    setContactMessage("");
+    const subjectText = contactForm.subject.trim();
+    const messageText = contactForm.message.trim();
+    const requesterCopy = [
+      `${activeCustomer.name} 様`,
+      "",
+      "講師への問い合わせを受け付けました。",
+      "内容を確認のうえ、メールで返信します。",
+      "",
+      "問い合わせ内容",
+      subjectText ? `件名: ${subjectText}` : "",
+      messageText,
+      "",
+      "Leo de Noir / Workaholic Owl"
+    ].filter(Boolean).join("\n");
+
     const sent = await sendPlatformNotification({
       name: activeCustomer.name,
       email: activeCustomer.email,
       inquiryType: "Learning生徒問い合わせ",
-      subject: "【生徒からの問い合わせ】",
+      subject: subjectText ? `【生徒からの問い合わせ】${subjectText}` : "【生徒からの問い合わせ】",
+      recipientGroup: "learningTutor",
+      copyToRequester: true,
+      copySubject: "講師への問い合わせを受け付けました",
+      copyMessage: requesterCopy,
       displayLanguage: language,
       message: [
         "生徒から問い合わせが届きました。",
@@ -2217,13 +2348,14 @@ function StudentDashboard({
         `StudentID: ${packageSummary.studentId}`,
         `生徒名: ${activeCustomer.name}`,
         `メールアドレス: ${activeCustomer.email}`,
-        contactForm.subject.trim() ? `件名: ${contactForm.subject.trim()}` : "",
+        subjectText ? `件名: ${subjectText}` : "",
         "",
         "問い合わせ内容:",
-        contactForm.message.trim()
+        messageText
       ].filter(Boolean).join("\n")
     });
 
+    setContactSubmitting(false);
     setContactMessage(sent ? text.contactSuccess : text.contactFailure);
     if (sent) {
       setContactForm({ subject: "", message: "" });
@@ -2268,43 +2400,46 @@ function StudentDashboard({
     const nextEmail = loginEmail.trim().toLowerCase();
 
     if (supabaseAvailable) {
-      const supabase = getSupabaseClient();
-      if (!supabase) return;
-
       if (authProvider === "google") {
         await startGoogleAuth();
         return;
       }
 
       if (authMode === "signup") {
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
-        const { error } = await supabase.auth.signInWithOtp({
-          email: nextEmail,
-          options: {
-            shouldCreateUser: true,
-            emailRedirectTo: `${window.location.origin}/learning/student`,
-            data: {
-              name: loginName.trim() || nextEmail.split("@")[0],
-              provider: authProvider
-            }
-          }
-        });
-        setAuthMessage(error ? error.message : "サインアップ用リンクをメールで送信しました。メールをご確認ください。");
-        return;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+          setAuthMessage(text.emailValidationError);
+          return;
+        }
       }
 
-      const response = await fetch("/api/student-auth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
-          identifier: loginEmail.trim(),
-          redirectTo: `${window.location.origin}/learning/student`
-        })
-      });
-      setAuthMessage(response.ok ? "サインイン用リンクをメールで送信しました。メールをご確認ください。" : "StudentIDまたはメールアドレスを確認してください。");
+      setAuthBusy(true);
+      setAuthMessage("");
+      try {
+        const response = await fetch("/api/student-auth", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json"
+          },
+          body: JSON.stringify({
+            mode: authMode,
+            identifier: loginEmail.trim(),
+            name: loginName.trim(),
+            provider: authProvider,
+            redirectTo: `${window.location.origin}/learning/student`
+          })
+        });
+        if (!response.ok) {
+          setAuthMessage(response.status === 404 ? text.authNotFound : text.authRequestFailure);
+          return;
+        }
+        window.sessionStorage.setItem(authPendingKey, "email");
+        setAuthMessage(authMode === "signup" ? text.signUpLinkSent : text.signInLinkSent);
+      } catch {
+        setAuthMessage(text.authRequestFailure);
+      } finally {
+        setAuthBusy(false);
+      }
       return;
     }
 
@@ -2405,7 +2540,7 @@ function StudentDashboard({
           ) : null}
           {authMessage ? (
             <p className={
-              authStatus === "checking" || authStatus === "signed-in" || authMessage.startsWith("StudentID") || authMessage.includes("送信しました")
+              authStatus === "checking" || authStatus === "signed-in" || authMessage.startsWith("StudentID") || authMessage === text.signUpLinkSent || authMessage === text.signInLinkSent
                 ? "form-success"
                 : "form-error"
             }>
@@ -2413,8 +2548,8 @@ function StudentDashboard({
             </p>
           ) : null}
           {authProvider === "email" ? (
-            <button className="button primary" type="submit">
-              {authMode === "signup" ? text.signUpButton : text.loginButton}
+            <button className="button primary" type="submit" disabled={authBusy || authStatus === "checking"}>
+              {authBusy ? text.authSending : authMode === "signup" ? text.signUpButton : text.loginButton}
             </button>
           ) : null}
         </form>
@@ -2560,8 +2695,8 @@ function StudentDashboard({
                 {text.contactBody}
                 <textarea value={contactForm.message} rows={6} onChange={(event) => setContactForm({ ...contactForm, message: event.target.value })} required />
               </label>
-              <button className="button primary" type="submit">
-                {text.contactSubmit}
+              <button className="button primary" type="submit" disabled={contactSubmitting}>
+                {contactSubmitting ? text.contactSending : text.contactSubmit}
               </button>
             </form>
           )}
@@ -3070,6 +3205,12 @@ function getStudentPageCopy(language: PlatformLanguage) {
       signUp: "サインアップ",
       loginButton: "確認する",
       signUpButton: "StudentIDを発行する",
+      authSending: "送信中",
+      signInLinkSent: "サインイン用リンクをメールで送信しました。メールをご確認ください。",
+      signUpLinkSent: "StudentID登録リンクをメールで送信しました。メールをご確認ください。",
+      authRequestFailure: "認証リンクを送信できませんでした。時間をおいて再度お試しください。",
+      authNotFound: "StudentIDまたはメールアドレスを確認してください。",
+      emailValidationError: "メールアドレスの形式を確認してください。",
       secureAuthEnabled: "安全な認証サービスに接続されています。",
       localAuthFallback: "現在は確認用のローカルログインです。Supabase設定後に安全な認証へ切り替わります。",
       dashboardTitle: "予約状況、パッケージ、学習履歴",
@@ -3124,6 +3265,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       contactSubject: "件名（任意）",
       contactBody: "問い合わせ内容",
       contactSubmit: "問い合わせを送信",
+      contactSending: "送信中",
       contactValidationError: "問い合わせ内容を入力してください。",
       contactSuccess: "問い合わせを送信しました。講師よりメールでご案内します。",
       contactFailure: "問い合わせを送信できませんでした。時間をおいて再度お試しください。",
@@ -3157,6 +3299,12 @@ function getStudentPageCopy(language: PlatformLanguage) {
       signUp: "Sign up",
       loginButton: "Continue",
       signUpButton: "Issue StudentID",
+      authSending: "Sending",
+      signInLinkSent: "A sign-in link has been sent to your email.",
+      signUpLinkSent: "A StudentID registration link has been sent to your email.",
+      authRequestFailure: "The authentication link could not be sent. Please try again later.",
+      authNotFound: "Please check your StudentID or email address.",
+      emailValidationError: "Please check the email address format.",
       secureAuthEnabled: "Secure authentication is connected.",
       localAuthFallback: "Local preview login is currently active. Secure authentication will be enabled after Supabase configuration.",
       dashboardTitle: "Bookings, Packages, and Lesson History",
@@ -3211,6 +3359,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       contactSubject: "Subject (optional)",
       contactBody: "Message",
       contactSubmit: "Send Inquiry",
+      contactSending: "Sending",
       contactValidationError: "Please enter your message.",
       contactSuccess: "Your inquiry has been sent. The tutor will reply by email.",
       contactFailure: "Your inquiry could not be sent. Please try again later.",
@@ -3244,6 +3393,12 @@ function getStudentPageCopy(language: PlatformLanguage) {
       signUp: "註冊",
       loginButton: "確認",
       signUpButton: "發行 StudentID",
+      authSending: "送出中",
+      signInLinkSent: "已將登入連結寄到您的電子郵件。",
+      signUpLinkSent: "已將 StudentID 註冊連結寄到您的電子郵件。",
+      authRequestFailure: "無法寄出認證連結，請稍後再試。",
+      authNotFound: "請確認 StudentID 或電子郵件。",
+      emailValidationError: "請確認電子郵件格式。",
       secureAuthEnabled: "已連接安全認證服務。",
       localAuthFallback: "目前使用本機預覽登入。完成 Supabase 設定後會切換為安全認證。",
       dashboardTitle: "預約、套裝課程與學習紀?",
@@ -3298,6 +3453,7 @@ function getStudentPageCopy(language: PlatformLanguage) {
       contactSubject: "主旨（選填）",
       contactBody: "詢問內容",
       contactSubmit: "送出詢問",
+      contactSending: "送出中",
       contactValidationError: "請輸入詢問內容。",
       contactSuccess: "詢問已送出。講師將以電子郵件回覆。",
       contactFailure: "詢問未能送出，請稍後再試。",

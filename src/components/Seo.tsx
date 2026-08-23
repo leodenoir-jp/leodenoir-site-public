@@ -4,9 +4,10 @@ import { siteConfig } from "../data/site";
 type SeoProps = {
   title: string;
   description: string;
+  noIndex?: boolean;
 };
 
-export function Seo({ title, description }: SeoProps) {
+export function Seo({ title, description, noIndex = false }: SeoProps) {
   useEffect(() => {
     const pageTitle = `${title}｜${siteConfig.brandName}`;
     const canonicalUrl = `${siteConfig.url}${window.location.pathname === "/" ? "/" : window.location.pathname}`;
@@ -21,8 +22,9 @@ export function Seo({ title, description }: SeoProps) {
     setMeta("twitter:title", pageTitle);
     setMeta("twitter:description", description);
     setMeta("twitter:image", ogImage);
+    setMeta("robots", noIndex ? "noindex, nofollow" : "index, follow");
     setLink("canonical", canonicalUrl);
-  }, [title, description]);
+  }, [title, description, noIndex]);
 
   return null;
 }

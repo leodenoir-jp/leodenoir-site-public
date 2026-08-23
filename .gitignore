@@ -4,6 +4,7 @@ dist
 .agents
 .vercel
 .env
+.env.local
 .DS_Store
 npm-debug.log*
 *.log

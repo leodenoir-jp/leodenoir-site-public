@@ -130,7 +130,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   }
 
   const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.CONTACT_FROM_EMAIL;
+  const fromEmail = process.env.CONTACT_FROM_EMAIL || process.env.STUDENT_AUTH_FROM_EMAIL;
   const body = normalizeBody(req.body);
   const name = toText(body.name);
   const email = toText(body.email);
@@ -143,7 +143,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const copyMessage = toText(body.copyMessage);
   const recipientGroup = toText(body.recipientGroup);
   const displayLanguage = formatDisplayLanguage(toText(body.displayLanguage));
-  const contactToEmail = process.env.CONTACT_TO_EMAIL;
+  const contactToEmail = process.env.CONTACT_TO_EMAIL || process.env.LEARNING_TUTOR_TO_EMAIL || defaultLearningTutorEmail;
   const purchaseToEmail = process.env.PURCHASE_TO_EMAIL;
   const learningTutorEmail = process.env.LEARNING_TUTOR_TO_EMAIL || defaultLearningTutorEmail;
 

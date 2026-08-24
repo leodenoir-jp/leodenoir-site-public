@@ -31,11 +31,5 @@
       "source": "/((?!api/|assets/|images/|favicon.svg).*)",
       "destination": "/index.html"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/counseling-reminders",
-      "schedule": "0 * * * *"
-    }
   ]
 }

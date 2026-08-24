@@ -1634,6 +1634,217 @@ textarea {
   text-align: center;
 }
 
+.lesson-video-section {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 18px;
+  margin-top: 4px;
+  outline: none;
+  padding-top: 24px;
+}
+
+.lesson-video-heading {
+  display: grid;
+  gap: 14px;
+}
+
+.lesson-video-heading h3 {
+  color: var(--navy);
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 0 0 6px;
+}
+
+.lesson-video-heading p:not(.eyebrow) {
+  margin: 0;
+}
+
+.lesson-video-language-switcher {
+  margin: 0;
+  width: 100%;
+}
+
+.lesson-video-language-switcher button {
+  font-size: 13px;
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+
+.lesson-video-section:focus-visible {
+  box-shadow: 0 0 0 3px rgba(38, 89, 118, 0.2);
+}
+
+.lesson-video-viewport {
+  background: #101922;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.lesson-video-slide {
+  background: #ffffff;
+  min-width: 0;
+}
+
+.lesson-video-slide.next {
+  animation: lesson-video-in-next 280ms ease-out;
+}
+
+.lesson-video-slide.previous {
+  animation: lesson-video-in-previous 280ms ease-out;
+}
+
+.lesson-video-slide iframe,
+.lesson-video-pending {
+  aspect-ratio: 16 / 9;
+  border: 0;
+  display: grid;
+  width: 100%;
+}
+
+.lesson-video-slide iframe {
+  background: #101922;
+}
+
+.lesson-video-pending {
+  align-content: center;
+  background: #101922;
+  color: #ffffff;
+  justify-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.lesson-video-pending span {
+  color: #afc4d0;
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.lesson-video-pending p {
+  color: #d7e1e7;
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 8px 0 0;
+  max-width: 320px;
+}
+
+.lesson-video-slide h4 {
+  color: var(--navy);
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 14px 16px 4px;
+}
+
+.lesson-video-description {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+  min-height: 62px;
+  padding: 0 16px 14px;
+}
+
+.lesson-video-arrow {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(16, 25, 34, 0.2);
+  border-radius: 50%;
+  color: var(--navy);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 32px;
+  height: 42px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 0 3px;
+  position: absolute;
+  top: 34%;
+  transform: translateY(-50%);
+  width: 42px;
+  z-index: 2;
+}
+
+.lesson-video-arrow:hover,
+.lesson-video-arrow:focus-visible {
+  background: #ffffff;
+  border-color: var(--navy);
+}
+
+.lesson-video-arrow.previous {
+  left: 10px;
+}
+
+.lesson-video-arrow.next {
+  right: 10px;
+}
+
+.lesson-video-footer {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  justify-content: space-between;
+}
+
+.lesson-video-dots {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.lesson-video-dots button {
+  background: #c8d3da;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  height: 9px;
+  padding: 0;
+  width: 9px;
+}
+
+.lesson-video-dots button.active {
+  background: var(--navy);
+  transform: scale(1.25);
+}
+
+@keyframes lesson-video-in-next {
+  from {
+    opacity: 0.45;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes lesson-video-in-previous {
+  from {
+    opacity: 0.45;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-video-slide.next,
+  .lesson-video-slide.previous {
+    animation: none;
+  }
+}
+
 .video-placeholder span,
 .record-list span,
 .timeline-list span,
@@ -2603,6 +2814,16 @@ textarea {
 
   .platform-switcher {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-video-language-switcher {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .lesson-video-arrow {
+    height: 38px;
+    width: 38px;
   }
 
   .auth-provider-grid {

@@ -9,3 +9,4 @@ dist
 npm-debug.log*
 *.log
 vite.config.ts.timestamp-*
+/public/videos/*.mp4

@@ -17,6 +17,7 @@ import {
   englishPronunciationMenus,
   japaneseLessonMenus,
   languageLabels,
+  lessonVideos,
   lessonProducts
 } from "../data/platform";
 
@@ -862,10 +863,7 @@ function LessonLanding({
 
         <aside className="platform-card">
           <LessonRules language={language} lessonKind={product.kind} />
-          <div className="video-placeholder" aria-label={product.demoVideoLabel}>
-            <span>Video</span>
-            <strong>準備中</strong>
-          </div>
+          <LessonVideoCarousel language={language} lessonKind={product.kind} />
           <p className="platform-note">{product.timezoneLabel}</p>
           <button className="button secondary" type="button" onClick={() => route.navigate("/learning/student")}>
             {menuLabel.studentButton}
@@ -885,6 +883,197 @@ function LessonLanding({
       ) : null}
     </div>
   );
+}
+
+function LessonVideoCarousel({ language, lessonKind }: { language: PlatformLanguage; lessonKind: LessonKind }) {
+  const [videoLanguage, setVideoLanguage] = useState<PlatformLanguage>(language);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [direction, setDirection] = useState<"next" | "previous">("next");
+  const touchStartX = useRef<number | null>(null);
+  const copy = getLessonVideoGalleryCopy(language);
+  const videos = [...lessonVideos[lessonKind][videoLanguage]].sort((first, second) => first.order - second.order);
+  const activeVideo = videos[activeIndex];
+  const youtubeId = activeVideo ? getYouTubeVideoId(activeVideo.youtubeId, activeVideo.youtubeUrl) : null;
+
+  useEffect(() => {
+    setVideoLanguage(language);
+  }, [language]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [lessonKind, videoLanguage]);
+
+  const moveTo = (nextIndex: number, nextDirection: "next" | "previous") => {
+    if (videos.length < 2) return;
+    setDirection(nextDirection);
+    setActiveIndex((nextIndex + videos.length) % videos.length);
+  };
+
+  const moveBy = (delta: number) => {
+    moveTo(activeIndex + delta, delta > 0 ? "next" : "previous");
+  };
+
+  return (
+    <section
+      className="lesson-video-section"
+      aria-labelledby="lesson-video-title"
+      aria-roledescription="carousel"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          moveBy(-1);
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          moveBy(1);
+        }
+      }}
+    >
+      <div className="lesson-video-heading">
+        <div>
+          <p className="eyebrow">Video</p>
+          <h3 id="lesson-video-title">{copy.title}</h3>
+          <p>{copy.lead}</p>
+        </div>
+        <div className="platform-switcher lesson-video-language-switcher" aria-label={copy.languageLabel}>
+          {(Object.keys(languageLabels) as PlatformLanguage[]).map((item) => (
+            <button
+              key={item}
+              className={item === videoLanguage ? "active" : ""}
+              type="button"
+              aria-pressed={item === videoLanguage}
+              onClick={() => setVideoLanguage(item)}
+            >
+              {languageLabels[item]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div
+        className="lesson-video-viewport"
+        onTouchStart={(event) => {
+          touchStartX.current = event.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(event) => {
+          if (touchStartX.current === null) return;
+          const endX = event.changedTouches[0]?.clientX ?? touchStartX.current;
+          const distance = endX - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(distance) < 40) return;
+          moveBy(distance < 0 ? 1 : -1);
+        }}
+      >
+        <article
+          className={`lesson-video-slide ${direction}`}
+          key={`${activeVideo?.id ?? "empty"}-${direction}`}
+          aria-live="polite"
+        >
+          {youtubeId ? (
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`}
+              title={activeVideo.title}
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : (
+            <div className="lesson-video-pending" aria-label={`${activeVideo?.title ?? copy.title} - ${copy.comingSoon}`}>
+              <span>YouTube</span>
+              <strong>{copy.comingSoon}</strong>
+              <p>{copy.emptyDescription}</p>
+            </div>
+          )}
+          <h4>{activeVideo?.title}</h4>
+          {activeVideo?.description ? <p className="lesson-video-description">{activeVideo.description}</p> : null}
+        </article>
+
+        {videos.length > 1 ? (
+          <>
+            <button className="lesson-video-arrow previous" type="button" onClick={() => moveBy(-1)} aria-label={copy.previous}>
+              ‹
+            </button>
+            <button className="lesson-video-arrow next" type="button" onClick={() => moveBy(1)} aria-label={copy.next}>
+              ›
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      <div className="lesson-video-footer">
+        <div className="lesson-video-dots" aria-label={copy.positionLabel}>
+          {videos.map((video, index) => (
+            <button
+              className={index === activeIndex ? "active" : ""}
+              type="button"
+              key={video.id}
+              aria-label={`${index + 1} / ${videos.length}: ${video.title}`}
+              aria-current={index === activeIndex ? "true" : undefined}
+              onClick={() => moveTo(index, index >= activeIndex ? "next" : "previous")}
+            />
+          ))}
+        </div>
+        <span>{activeIndex + 1} / {videos.length}</span>
+      </div>
+    </section>
+  );
+}
+
+function getYouTubeVideoId(youtubeId?: string, youtubeUrl?: string) {
+  const directId = youtubeId?.trim();
+  if (directId) return directId;
+  if (!youtubeUrl?.trim()) return null;
+
+  try {
+    const url = new URL(youtubeUrl);
+    if (url.hostname === "youtu.be") return url.pathname.split("/").filter(Boolean)[0] ?? null;
+    const queryId = url.searchParams.get("v");
+    if (queryId) return queryId;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const markerIndex = parts.findIndex((part) => part === "embed" || part === "shorts");
+    return markerIndex >= 0 ? parts[markerIndex + 1] ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+function getLessonVideoGalleryCopy(language: PlatformLanguage) {
+  const copies = {
+    ja: {
+      title: "1on1日本語レッスン動画",
+      lead: "講師について、レッスンで得られること、コースの特徴を動画でご覧いただけます。",
+      languageLabel: "動画の言語",
+      comingSoon: "準備中",
+      emptyDescription: "動画の公開後、この画面でそのまま再生できます。",
+      previous: "前の動画",
+      next: "次の動画",
+      positionLabel: "動画の現在位置"
+    },
+    en: {
+      title: "1-on-1 Japanese Lesson Videos",
+      lead: "Learn about your tutor, the benefits of the lessons, and the course features.",
+      languageLabel: "Video language",
+      comingSoon: "Coming soon",
+      emptyDescription: "The video will play here once it is published.",
+      previous: "Previous video",
+      next: "Next video",
+      positionLabel: "Current video position"
+    },
+    "zh-Hant": {
+      title: "一對一日語課程影片",
+      lead: "透過影片了解講師、課程優勢與各課程特色。",
+      languageLabel: "影片語言",
+      comingSoon: "準備中",
+      emptyDescription: "影片公開後即可直接在此播放。",
+      previous: "上一部影片",
+      next: "下一部影片",
+      positionLabel: "目前影片位置"
+    }
+  };
+
+  return copies[language];
 }
 
 function LessonRules({ language, lessonKind }: { language: PlatformLanguage; lessonKind: LessonKind }) {

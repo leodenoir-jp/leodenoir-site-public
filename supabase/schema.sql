@@ -62,8 +62,11 @@ create table if not exists public.lesson_purchase_offers (
   duration_minutes integer not null check (duration_minutes in (25, 50)),
   quantity integer not null check (quantity > 0 and quantity <= 100),
   currency text not null check (currency in ('USD', 'JPY')),
-  unit_price numeric not null check (unit_price > 0),
-  total_amount numeric not null check (total_amount > 0),
+  unit_price numeric not null check (
+    (currency = 'USD' and unit_price between 0 and 100)
+    or (currency = 'JPY' and unit_price between 0 and 30000)
+  ),
+  total_amount numeric not null check (total_amount >= 0),
   payment_method text not null check (payment_method in ('PayPal', 'PayPay')),
   payment_link text not null,
   receipt_requested boolean not null default false,

@@ -8,8 +8,11 @@ create table if not exists public.lesson_purchase_offers (
   duration_minutes integer not null check (duration_minutes in (25, 50)),
   quantity integer not null check (quantity > 0 and quantity <= 100),
   currency text not null check (currency in ('USD', 'JPY')),
-  unit_price numeric not null check (unit_price > 0),
-  total_amount numeric not null check (total_amount > 0),
+  unit_price numeric not null check (
+    (currency = 'USD' and unit_price between 0 and 100)
+    or (currency = 'JPY' and unit_price between 0 and 30000)
+  ),
+  total_amount numeric not null check (total_amount >= 0),
   payment_method text not null check (payment_method in ('PayPal', 'PayPay')),
   payment_link text not null,
   receipt_requested boolean not null default false,
@@ -30,6 +33,21 @@ create index if not exists lesson_purchase_offers_status_idx
   on public.lesson_purchase_offers(status);
 
 alter table public.lesson_purchase_offers enable row level security;
+
+alter table public.lesson_purchase_offers
+  drop constraint if exists lesson_purchase_offers_unit_price_check;
+
+alter table public.lesson_purchase_offers
+  add constraint lesson_purchase_offers_unit_price_check check (
+    (currency = 'USD' and unit_price between 0 and 100)
+    or (currency = 'JPY' and unit_price between 0 and 30000)
+  );
+
+alter table public.lesson_purchase_offers
+  drop constraint if exists lesson_purchase_offers_total_amount_check;
+
+alter table public.lesson_purchase_offers
+  add constraint lesson_purchase_offers_total_amount_check check (total_amount >= 0);
 
 drop policy if exists "students can read own purchase offers"
   on public.lesson_purchase_offers;

@@ -153,6 +153,24 @@ function getAuthCallbackError() {
 }
 const tutorLoginPlaceholder = "yourtutor@info.com";
 
+const jpyUnitPriceOptions = [
+  ...Array.from({ length: 21 }, (_, index) => index * 500),
+  ...Array.from({ length: 20 }, (_, index) => 11_000 + index * 1_000)
+];
+
+function getClosestJpyUnitPriceIndex(value: number) {
+  let closestIndex = 0;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  jpyUnitPriceOptions.forEach((option, index) => {
+    const distance = Math.abs(option - value);
+    if (distance < closestDistance) {
+      closestIndex = index;
+      closestDistance = distance;
+    }
+  });
+  return closestIndex;
+}
+
 const initialBlockedStudents = ["blocked.student@example.com"];
 const weekDayLabels = [
   { value: 0, label: "日" },
@@ -2627,16 +2645,68 @@ function TutorAvailabilityPage({
             </label>
             <label>
               通貨
-              <select value={purchaseOfferForm.currency} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, currency: event.target.value as "USD" | "JPY" })}>
+              <select value={purchaseOfferForm.currency} onChange={(event) => {
+                const currency = event.target.value as "USD" | "JPY";
+                setPurchaseOfferForm((current) => ({
+                  ...current,
+                  currency,
+                  unitPrice: currency === "USD" ? 28 : 5_000
+                }));
+              }}>
                 <option value="USD">USD</option>
                 <option value="JPY">JPY</option>
               </select>
             </label>
           </div>
           <div className="platform-grid three">
-            <label>
-              1枠あたり単価
-              <input type="number" min="0.01" step="0.01" value={purchaseOfferForm.unitPrice} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, unitPrice: Number(event.target.value) })} required />
+            <label className="time-slider-control">
+              {purchaseOfferForm.currency === "USD" ? (
+                <>
+                  <span>1枠あたり単価 <strong>{purchaseOfferForm.unitPrice} USD</strong></span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={purchaseOfferForm.unitPrice}
+                    onChange={(event) => setPurchaseOfferForm((current) => ({ ...current, unitPrice: Number(event.target.value) }))}
+                    onWheel={(event) => {
+                      event.preventDefault();
+                      const direction = event.deltaY < 0 ? 1 : -1;
+                      setPurchaseOfferForm((current) => ({
+                        ...current,
+                        unitPrice: Math.min(100, Math.max(0, current.unitPrice + direction))
+                      }));
+                    }}
+                    aria-label="1枠あたり単価（USD）"
+                  />
+                </>
+              ) : (
+                <>
+                  <span>1枠あたり単価 <strong>{purchaseOfferForm.unitPrice.toLocaleString()} JPY</strong></span>
+                  <input
+                    type="range"
+                    min="0"
+                    max={jpyUnitPriceOptions.length - 1}
+                    step="1"
+                    value={getClosestJpyUnitPriceIndex(purchaseOfferForm.unitPrice)}
+                    onChange={(event) => setPurchaseOfferForm((current) => ({
+                      ...current,
+                      unitPrice: jpyUnitPriceOptions[Number(event.target.value)]
+                    }))}
+                    onWheel={(event) => {
+                      event.preventDefault();
+                      const direction = event.deltaY < 0 ? 1 : -1;
+                      setPurchaseOfferForm((current) => {
+                        const currentIndex = getClosestJpyUnitPriceIndex(current.unitPrice);
+                        const nextIndex = Math.min(jpyUnitPriceOptions.length - 1, Math.max(0, currentIndex + direction));
+                        return { ...current, unitPrice: jpyUnitPriceOptions[nextIndex] };
+                      });
+                    }}
+                    aria-label="1枠あたり単価（JPY）"
+                  />
+                </>
+              )}
             </label>
             <label>
               合計

@@ -1974,7 +1974,7 @@ function TutorAvailabilityPage({
     setAdminBusy(true);
     setAdminMessage("");
     try {
-      const response = await fetch("/api/counseling", {
+      const response = await fetch("/api/learning", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ action: "admin-login", email: nextEmail, password: loginPassword })

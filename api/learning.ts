@@ -1,11 +1,3 @@
-import {
-  assertCounselor,
-  cleanText,
-  createServiceClient,
-  getBearerToken,
-  normalizeBody
-} from "./_lib/counseling";
-
 declare const process: {
   env: Record<string, string | undefined>;
 };
@@ -65,6 +57,101 @@ type PurchaseOfferRecord = {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ownerEmail = "yu.leobiz003@outlook.com";
+const adminSessionPrefix = "learning-admin:";
+
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeBody(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function getBearerToken(headers?: Record<string, string | string[] | undefined>) {
+  const header = headers?.authorization;
+  const value = Array.isArray(header) ? header[0] : header;
+  return value?.startsWith("Bearer ") ? value.slice(7) : "";
+}
+
+async function createServiceClient() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) throw new Error("Supabase server configuration is missing.");
+  const { createClient } = await import("@supabase/supabase-js");
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+
+function adminEmail() {
+  return (process.env.COUNSELING_ADMIN_LOGIN_EMAIL || "yu.leobiz001@outlook.com").trim().toLowerCase();
+}
+
+function adminPassword() {
+  return process.env.COUNSELING_ADMIN_LOGIN_PASSWORD || "";
+}
+
+function adminSecret() {
+  return process.env.COUNSELING_ADMIN_SESSION_SECRET
+    || process.env.SUPABASE_SERVICE_ROLE_KEY
+    || process.env.RESEND_API_KEY
+    || adminPassword();
+}
+
+async function signAdminPayload(payload: string) {
+  const { createHmac } = await import("node:crypto");
+  return createHmac("sha256", adminSecret()).update(payload).digest("base64url");
+}
+
+async function createAdminSession(email: string, password: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!adminPassword() || normalizedEmail !== adminEmail() || password !== adminPassword()) throw new Error("Unauthorized");
+  const payload = Buffer.from(JSON.stringify({
+    email: normalizedEmail,
+    exp: Date.now() + 1000 * 60 * 60 * 8
+  })).toString("base64url");
+  const signature = await signAdminPayload(payload);
+  return `${adminSessionPrefix}${payload}.${signature}`;
+}
+
+async function verifyAdminSession(token: string) {
+  if (!token.startsWith(adminSessionPrefix)) return null;
+  const [payload, signature] = token.slice(adminSessionPrefix.length).split(".");
+  if (!payload || !signature || signature !== await signAdminPayload(payload)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { email?: string; exp?: number };
+    if (parsed.email !== adminEmail() || !parsed.exp || parsed.exp < Date.now()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function assertTutor(token: string) {
+  if (!token) throw new Error("Unauthorized");
+  const admin = await verifyAdminSession(token);
+  if (admin) return admin;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !anonKey) throw new Error("Supabase auth configuration is missing.");
+  const { createClient } = await import("@supabase/supabase-js");
+  const authClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await authClient.auth.getUser(token);
+  if (error || data.user?.email?.toLowerCase() !== ownerEmail) throw new Error("Unauthorized");
+  return data.user;
+}
+
+async function loginTutor(body: Record<string, unknown>, res: ApiResponse) {
+  const token = await createAdminSession(cleanText(body.email), cleanText(body.password));
+  return res.status(200).json({ token });
+}
 
 function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -176,7 +263,7 @@ async function listAvailability(res: ApiResponse) {
 }
 
 async function listAdmin(req: ApiRequest, res: ApiResponse) {
-  await assertCounselor(getBearerToken(req.headers));
+  await assertTutor(getBearerToken(req.headers));
   const serviceClient = await createServiceClient();
   const [slotsResult, offersResult, studentsResult] = await Promise.all([
     serviceClient.from("availability_slots").select("id,starts_at,ends_at,timezone,delivery_mode,note").order("starts_at", { ascending: true }),
@@ -196,7 +283,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
 }
 
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
-  await assertCounselor(getBearerToken(req.headers));
+  await assertTutor(getBearerToken(req.headers));
   const values = Array.isArray(body.slots) ? body.slots : [];
   const slots = values.map(normalizeAvailability).filter((slot): slot is AvailabilityInput => Boolean(slot));
   if (slots.length === 0 || slots.length > 500) return res.status(400).json({ message: "有効な空き枠を入力してください。" });
@@ -229,7 +316,7 @@ async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, 
 }
 
 async function deleteAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
-  await assertCounselor(getBearerToken(req.headers));
+  await assertTutor(getBearerToken(req.headers));
   const slotId = cleanText(body.slotId);
   if (!slotId) return res.status(400).json({ message: "空き枠IDが必要です。" });
   const serviceClient = await createServiceClient();
@@ -291,7 +378,7 @@ function purchaseOfferCopy(offer: PurchaseOfferRecord) {
 }
 
 async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
-  await assertCounselor(getBearerToken(req.headers));
+  await assertTutor(getBearerToken(req.headers));
   const email = cleanText(body.email).toLowerCase();
   const name = cleanText(body.name);
   const lessonKind = cleanText(body.lessonKind) === "english" ? "english" : "japanese";
@@ -355,7 +442,7 @@ function buildReceiptHtml(offer: PurchaseOfferRecord) {
 }
 
 async function markOfferPaid(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
-  await assertCounselor(getBearerToken(req.headers));
+  await assertTutor(getBearerToken(req.headers));
   const offerId = cleanText(body.offerId);
   if (!offerId) return res.status(400).json({ message: "購入案内IDが必要です。" });
   const serviceClient = await createServiceClient();
@@ -442,6 +529,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     const body = normalizeBody(req.body);
     const action = cleanText(body.action);
+    if (action === "admin-login") return await loginTutor(body, res);
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);

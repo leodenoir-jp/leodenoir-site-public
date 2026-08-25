@@ -63,6 +63,12 @@ function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
+  return "Unknown error";
+}
+
 function normalizeBody(value: unknown): Record<string, unknown> {
   if (typeof value === "string") {
     try {
@@ -246,8 +252,12 @@ function normalizeAvailability(value: unknown): AvailabilityInput | null {
   const end = cleanText(record.end);
   const timezone = cleanText(record.timezone) || "Asia/Tokyo";
   const deliveryMode = cleanText(record.deliveryMode) === "inPerson" ? "inPerson" : "online";
-  const startDate = new Date(start);
-  const endDate = new Date(end);
+  const includesOffset = (dateTime: string) => /(?:Z|[+-]\d{2}:\d{2})$/i.test(dateTime);
+  const normalizeDateTime = (dateTime: string) => (
+    dateTime && !includesOffset(dateTime) && timezone === "Asia/Tokyo" ? `${dateTime}+09:00` : dateTime
+  );
+  const startDate = new Date(normalizeDateTime(start));
+  const endDate = new Date(normalizeDateTime(end));
   if (!start || !end || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) return null;
   return {
     start: startDate.toISOString(),
@@ -287,14 +297,26 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
     serviceClient.from("students").select("id,student_id,email,name").order("created_at", { ascending: false })
   ]);
   if (slotsResult.error) throw slotsResult.error;
-  if (studentsResult.error) throw studentsResult.error;
   const purchaseOffersReady = !offersResult.error;
-  if (offersResult.error && offersResult.error.code !== "42P01") throw offersResult.error;
+  const studentsReady = !studentsResult.error;
+  if (offersResult.error) {
+    console.error("Learning purchase offers could not be loaded.", {
+      code: offersResult.error.code,
+      message: offersResult.error.message
+    });
+  }
+  if (studentsResult.error) {
+    console.error("Learning students could not be loaded.", {
+      code: studentsResult.error.code,
+      message: studentsResult.error.message
+    });
+  }
   return res.status(200).json({
     slots: slotsResult.data ?? [],
     offers: purchaseOffersReady ? offersResult.data ?? [] : [],
-    students: studentsResult.data ?? [],
-    purchaseOffersReady
+    students: studentsReady ? studentsResult.data ?? [] : [],
+    purchaseOffersReady,
+    studentsReady
   });
 }
 
@@ -344,7 +366,12 @@ async function deleteAvailability(body: Record<string, unknown>, req: ApiRequest
     .maybeSingle();
   if (error) throw error;
   if (!data) return res.status(404).json({ message: "空き枠が見つかりません。画面を更新して再度お試しください。" });
-  return res.status(200).json({ message: "空き枠を削除しました。" });
+  const { data: remainingSlots, error: listError } = await serviceClient
+    .from("availability_slots")
+    .select("id,starts_at,ends_at,timezone,delivery_mode,note")
+    .order("starts_at", { ascending: true });
+  if (listError) throw listError;
+  return res.status(200).json({ message: "空き枠を削除しました。", slots: remainingSlots ?? [] });
 }
 
 async function generateStudentId(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
@@ -571,7 +598,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);
     return res.status(400).json({ message: "Unknown action." });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const message = errorMessage(error);
     console.error("Learning API failed.", { message });
     if (message === "Unauthorized") return res.status(401).json({ message: "Unauthorized" });
     if (message === "Mail configuration is missing." || message === "Mail configuration is invalid.") {

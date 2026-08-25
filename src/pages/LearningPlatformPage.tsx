@@ -2067,8 +2067,10 @@ function TutorAvailabilityPage({
     setDeletingAvailabilityId(slotId);
     setAvailabilityDeleteMessage("空き枠を削除しています...");
     try {
-      const body = await postLearningAdmin({ action: "delete-availability", slotId });
-      setAvailabilitySlots((current) => current.filter((slot) => slot.id !== slotId));
+      const body = await postLearningAdmin<{ slots?: Array<Record<string, unknown>> }>({ action: "delete-availability", slotId });
+      const nextSlots = body.slots?.map(mapAdminSlot);
+      if (nextSlots) setAvailabilitySlots(nextSlots);
+      else setAvailabilitySlots((current) => current.filter((slot) => slot.id !== slotId));
       setAvailabilityDeleteMessage(body.message || "空き枠を削除しました。");
     } catch (error) {
       setAvailabilityDeleteMessage(error instanceof Error ? error.message : "空き枠を削除できませんでした。");

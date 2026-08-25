@@ -180,6 +180,7 @@ function renderEmailHtml(content: string) {
 
 async function sendEmail({
   to,
+  bcc,
   replyTo,
   subject,
   text,
@@ -187,30 +188,37 @@ async function sendEmail({
   attachments
 }: {
   to: string;
+  bcc?: string;
   replyTo: string;
   subject: string;
   text: string;
   html: string;
   attachments?: Array<{ filename: string; content: string }>;
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.CONTACT_FROM_EMAIL || process.env.STUDENT_AUTH_FROM_EMAIL;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = (process.env.CONTACT_FROM_EMAIL || process.env.STUDENT_AUTH_FROM_EMAIL)?.trim();
   if (!apiKey || !from) throw new Error("Mail configuration is missing.");
+  if (!apiKey.startsWith("re_")) {
+    console.error("Learning email configuration is invalid.", { reason: "RESEND_API_KEY format" });
+    throw new Error("Mail configuration is invalid.");
+  }
+  const payload = {
+    from,
+    to,
+    ...(bcc ? { bcc } : {}),
+    reply_to: replyTo,
+    subject,
+    text,
+    html,
+    attachments
+  };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      from,
-      to,
-      reply_to: replyTo,
-      subject,
-      text,
-      html,
-      attachments
-    })
+    body: JSON.stringify(payload)
   });
   if (!response.ok) {
     const errorBody = await response.text();
@@ -221,6 +229,13 @@ async function sendEmail({
     });
     throw new Error("Failed to send email.");
   }
+  const result = await response.json().catch(() => ({})) as { id?: string };
+  console.info("Learning email accepted.", {
+    provider: "resend",
+    emailId: result.id || "unknown",
+    recipientCount: bcc ? 2 : 1
+  });
+  return result.id;
 }
 
 function normalizeAvailability(value: unknown): AvailabilityInput | null {
@@ -426,13 +441,26 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   if (error) throw error;
   const offer = data as PurchaseOfferRecord;
   const copy = purchaseOfferCopy(offer);
-  await sendEmail({
-    to: email,
-    replyTo: process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail,
-    subject: copy.subject,
-    text: copy.text,
-    html: renderEmailHtml(`<p>${escapeHtml(copy.text).replace(/\n/g, "<br />")}</p>`)
-  });
+  const tutorEmail = (process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail).trim().toLowerCase();
+  try {
+    await sendEmail({
+      to: email,
+      bcc: tutorEmail !== email ? tutorEmail : undefined,
+      replyTo: tutorEmail,
+      subject: copy.subject,
+      text: copy.text,
+      html: renderEmailHtml(`<p>${escapeHtml(copy.text).replace(/\n/g, "<br />")}</p>`)
+    });
+  } catch (mailError) {
+    const { error: rollbackError } = await serviceClient.from("lesson_purchase_offers").delete().eq("id", offer.id);
+    if (rollbackError) {
+      console.error("Failed to roll back undelivered purchase offer.", {
+        offerId: offer.offer_id,
+        message: rollbackError.message
+      });
+    }
+    throw mailError;
+  }
   return res.status(200).json({ message: "購入案内を送信しました。", offer });
 }
 
@@ -545,6 +573,12 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Learning API failed.", { message });
     if (message === "Unauthorized") return res.status(401).json({ message: "Unauthorized" });
+    if (message === "Mail configuration is missing." || message === "Mail configuration is invalid.") {
+      return res.status(500).json({ message: "メール送信設定に問題があります。管理者が設定を確認してください。" });
+    }
+    if (message === "Failed to send email.") {
+      return res.status(502).json({ message: "メール送信サービスでエラーが発生しました。時間をおいて再度お試しください。" });
+    }
     return res.status(500).json({ message: "処理を完了できませんでした。時間をおいて再度お試しください。" });
   }
 }

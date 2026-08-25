@@ -101,9 +101,40 @@ type SharedScheduleReservation = {
   status: "active" | "cancelled";
 };
 
+type LearningAdminStudent = {
+  id: string;
+  student_id: string;
+  email: string;
+  name: string | null;
+};
+
+type LearningPurchaseOffer = {
+  id: string;
+  offer_id: string;
+  lesson_kind: LessonKind;
+  lesson_menu_id: string;
+  package_label: string;
+  duration_minutes: 25 | 50;
+  quantity: number;
+  currency: "USD" | "JPY";
+  unit_price: number;
+  total_amount: number;
+  payment_method: "PayPal" | "PayPay";
+  payment_link: string;
+  receipt_requested: boolean;
+  receipt_name: string | null;
+  display_language: PlatformLanguage;
+  status: "pending_payment" | "paid" | "cancelled";
+  offered_at: string;
+  paid_at: string | null;
+  receipt_sent_at: string | null;
+  students: LearningAdminStudent;
+};
+
 const storageKey = "ldn-platform-language";
 const studentEmailKey = "ldn-platform-student-email";
 const tutorSessionKey = "ldn-platform-tutor-session-email";
+const tutorAdminSessionKey = "ldn-counseling-admin-session";
 const authPendingKey = "ldn-platform-auth-pending";
 const availabilityStorageKey = "ldn-platform-tutor-availability";
 const bookingsStorageKey = "ldn-platform-bookings";
@@ -329,16 +360,20 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     let mounted = true;
     const loadSharedSchedule = async () => {
       try {
-        const [availabilityResponse, occupancyResponse] = await Promise.all([
+        const [learningAvailabilityResponse, availabilityResponse, occupancyResponse] = await Promise.all([
+          fetch("/api/learning?mode=availability", { headers: { Accept: "application/json" } }),
           fetch("/api/counseling?mode=availability", { headers: { Accept: "application/json" } }),
           fetch("/api/counseling?mode=occupancy", { headers: { Accept: "application/json" } })
         ]);
-        if (!availabilityResponse.ok || !occupancyResponse.ok) return;
+        if (!learningAvailabilityResponse.ok || !availabilityResponse.ok || !occupancyResponse.ok) return;
+        if (!learningAvailabilityResponse.headers.get("content-type")?.includes("application/json")) return;
         if (!availabilityResponse.headers.get("content-type")?.includes("application/json")) return;
         if (!occupancyResponse.headers.get("content-type")?.includes("application/json")) return;
+        const learningAvailabilityBody = await learningAvailabilityResponse.json() as { slots?: TutorAvailabilitySlot[] };
         const availabilityBody = await availabilityResponse.json() as { slots?: Array<{ id: string; start: string; timezone: string }> };
         const occupancyBody = await occupancyResponse.json() as { reservations?: SharedScheduleReservation[] };
         if (!mounted) return;
+        setAvailabilitySlotsBase(learningAvailabilityBody.slots ?? []);
         setSharedAvailabilitySlots((availabilityBody.slots ?? []).map((slot) => ({
           id: `SHARED-${slot.id}`,
           start: slot.start,
@@ -1816,6 +1851,13 @@ function TutorAvailabilityPage({
 }) {
   const [loginEmail, setLoginEmail] = useState(() => window.localStorage.getItem(tutorSessionKey) ?? tutorLoginPlaceholder);
   const [tutorEmail, setTutorEmail] = useState(() => window.localStorage.getItem(tutorSessionKey) ?? "");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [adminToken, setAdminToken] = useState(() => window.sessionStorage.getItem(tutorAdminSessionKey) ?? "");
+  const [adminMessage, setAdminMessage] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [purchaseOffers, setPurchaseOffers] = useState<LearningPurchaseOffer[]>([]);
+  const [adminStudents, setAdminStudents] = useState<LearningAdminStudent[]>([]);
+  const [purchaseOffersReady, setPurchaseOffersReady] = useState(true);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
@@ -1831,6 +1873,22 @@ function TutorAvailabilityPage({
     note: ""
   });
   const [registrationMode, setRegistrationMode] = useState<"single" | "recurring">("single");
+  const [purchaseOfferForm, setPurchaseOfferForm] = useState({
+    name: "",
+    email: "",
+    lessonKind: "japanese" as LessonKind,
+    lessonMenuId: "jp-custom-50",
+    packageLabel: "1on1日本語レッスン 50分 特別パッケージ",
+    durationMinutes: 50 as 25 | 50,
+    quantity: 15,
+    currency: "USD" as "USD" | "JPY",
+    unitPrice: 28,
+    paymentMethod: "PayPal" as "PayPal" | "PayPay",
+    paymentLink: "",
+    receiptRequested: true,
+    receiptName: "",
+    displayLanguage: "ja" as PlatformLanguage
+  });
   const [recurringForm, setRecurringForm] = useState<{
     startDate: string;
     weeks: number;
@@ -1850,7 +1908,7 @@ function TutorAvailabilityPage({
     note: "",
     weekdays: [1, 3, 5]
   });
-  const isOwner = tutorEmail.toLowerCase() === ownerEmail;
+  const isOwner = Boolean(adminToken);
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
@@ -1873,15 +1931,85 @@ function TutorAvailabilityPage({
     ? studentProfiles.find((profile) => profile.email.toLowerCase() === selectedTutorBooking.studentEmail.toLowerCase())?.zoomLink ?? ""
     : "";
 
-  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+  const mapAdminSlot = (slot: Record<string, unknown>): TutorAvailabilitySlot => ({
+    id: String(slot.id),
+    start: String(slot.starts_at),
+    end: String(slot.ends_at),
+    timezone: String(slot.timezone || "Asia/Tokyo"),
+    deliveryMode: slot.delivery_mode === "inPerson" ? "inPerson" : "online",
+    note: typeof slot.note === "string" ? slot.note : ""
+  });
+
+  const loadLearningAdmin = async (token: string) => {
+    const response = await fetch("/api/learning?mode=admin", {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+    });
+    const body = await response.json() as {
+      message?: string;
+      slots?: Array<Record<string, unknown>>;
+      offers?: LearningPurchaseOffer[];
+      students?: LearningAdminStudent[];
+      purchaseOffersReady?: boolean;
+    };
+    if (!response.ok) throw new Error(body.message || "講師管理データを取得できませんでした。");
+    setAvailabilitySlots((body.slots ?? []).map(mapAdminSlot));
+    setPurchaseOffers(body.offers ?? []);
+    setAdminStudents(body.students ?? []);
+    setPurchaseOffersReady(body.purchaseOffersReady !== false);
+  };
+
+  useEffect(() => {
+    if (!adminToken) return;
+    void loadLearningAdmin(adminToken).catch((error) => {
+      window.sessionStorage.removeItem(tutorAdminSessionKey);
+      setAdminToken("");
+      setAdminMessage(error instanceof Error ? error.message : "講師管理データを取得できませんでした。");
+    });
+  }, []);
+
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const nextEmail = loginEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
-    setTutorEmail(nextEmail);
-    window.localStorage.setItem(tutorSessionKey, nextEmail);
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const response = await fetch("/api/counseling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ action: "admin-login", email: nextEmail, password: loginPassword })
+      });
+      const body = await response.json() as { token?: string; message?: string };
+      if (!response.ok || !body.token) throw new Error(body.message || "IDまたはパスワードが一致しません。");
+      window.sessionStorage.setItem(tutorAdminSessionKey, body.token);
+      window.localStorage.setItem(tutorSessionKey, nextEmail);
+      setTutorEmail(nextEmail);
+      setAdminToken(body.token);
+      setLoginPassword("");
+      await loadLearningAdmin(body.token);
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "ログインできませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
-  const addAvailabilitySlot = (event: FormEvent<HTMLFormElement>) => {
+  const postLearningAdmin = async <T,>(payload: Record<string, unknown>) => {
+    const response = await fetch("/api/learning", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${adminToken}`
+      },
+      body: JSON.stringify(payload)
+    });
+    const body = await response.json() as T & { message?: string };
+    if (!response.ok) throw new Error(body.message || "処理を完了できませんでした。");
+    return body;
+  };
+
+  const addAvailabilitySlot = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form.startDate || !form.startTime) return;
     const start = `${form.startDate}T${form.startTime}`;
@@ -1895,12 +2023,34 @@ function TutorAvailabilityPage({
       note: form.note.trim() || "単日登録枠"
     };
 
-    setAvailabilitySlots([...availabilitySlots, nextSlot].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
-    setForm({ ...form, startDate: "", note: "" });
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin<{ slots?: Array<Record<string, unknown>> }>({ action: "save-availability", slots: [nextSlot] });
+      const saved = (body.slots ?? []).map(mapAdminSlot);
+      setAvailabilitySlots(Array.from(new Map([...availabilitySlots, ...saved].map((slot) => [slot.id, slot])).values())
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+      setForm({ ...form, startDate: "", note: "" });
+      setAdminMessage(body.message || "単日枠を保存しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "単日枠を保存できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
-  const removeAvailabilitySlot = (slotId: string) => {
-    setAvailabilitySlots(availabilitySlots.filter((slot) => slot.id !== slotId));
+  const removeAvailabilitySlot = async (slotId: string) => {
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin({ action: "delete-availability", slotId });
+      setAvailabilitySlots(availabilitySlots.filter((slot) => slot.id !== slotId));
+      setAdminMessage(body.message || "空き枠を削除しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "空き枠を削除できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
   const updateStudentZoomLink = (email: string, zoomLink: string) => {
@@ -1992,7 +2142,7 @@ function TutorAvailabilityPage({
     setRecurringForm({ ...recurringForm, weekdays });
   };
 
-  const addRecurringAvailabilitySlots = (event: FormEvent<HTMLFormElement>) => {
+  const addRecurringAvailabilitySlots = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!recurringForm.startDate || !recurringForm.startTime || !recurringForm.endTime || recurringForm.weekdays.length === 0) return;
     if (timeToMinutes(recurringForm.endTime) <= timeToMinutes(recurringForm.startTime)) return;
@@ -2014,7 +2164,48 @@ function TutorAvailabilityPage({
         };
       });
 
-    setAvailabilitySlots([...availabilitySlots, ...nextSlots].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin<{ slots?: Array<Record<string, unknown>> }>({ action: "save-availability", slots: nextSlots });
+      const saved = (body.slots ?? []).map(mapAdminSlot);
+      setAvailabilitySlots(Array.from(new Map([...availabilitySlots, ...saved].map((slot) => [slot.id, slot])).values())
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()));
+      setAdminMessage(body.message || "定期予約枠を保存しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "定期予約枠を保存できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  const sendPurchaseOffer = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin<{ offer?: LearningPurchaseOffer }>({ action: "send-purchase-offer", ...purchaseOfferForm });
+      if (body.offer) setPurchaseOffers([body.offer, ...purchaseOffers]);
+      setAdminMessage(body.message || "購入案内を送信しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "購入案内を送信できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  const markPurchaseOfferPaid = async (offerId: string) => {
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin<{ offer?: LearningPurchaseOffer }>({ action: "mark-offer-paid", offerId });
+      if (body.offer) setPurchaseOffers(purchaseOffers.map((offer) => offer.id === offerId ? body.offer as LearningPurchaseOffer : offer));
+      setAdminMessage(body.message || "入金確認を反映しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "入金確認を反映できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
   const publishReview = (reviewId: string) => {
@@ -2113,8 +2304,13 @@ function TutorAvailabilityPage({
           講師メールアドレス
           <input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={tutorLoginPlaceholder} required />
         </label>
-        <button className="button primary" type="submit">
-          講師画面を開く
+        <label>
+          パスワード
+          <input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} autoComplete="current-password" required />
+        </label>
+        {adminMessage ? <p className="form-error">{adminMessage}</p> : null}
+        <button className="button primary" type="submit" disabled={adminBusy}>
+          {adminBusy ? "確認中..." : "講師画面を開く"}
         </button>
         <p className="platform-note">講師本人のみが使用する管理画面です。</p>
       </form>
@@ -2133,6 +2329,8 @@ function TutorAvailabilityPage({
           <p className="platform-badge">{tutorEmail}</p>
         </div>
       </div>
+
+      {adminMessage ? <p className={adminMessage.includes("できません") || adminMessage.includes("失敗") ? "form-error" : "form-success"}>{adminMessage}</p> : null}
 
       <section className="platform-card">
         <h3>予約リクエスト管理</h3>
@@ -2297,8 +2495,8 @@ function TutorAvailabilityPage({
               メモ
               <textarea value={form.note} rows={4} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="例：日本語レッスン優先 / 英語発音コーチング可" />
             </label>
-            <button className="button primary" type="submit">
-              単日枠を追加
+            <button className="button primary" type="submit" disabled={adminBusy}>
+              {adminBusy ? "保存中..." : "単日枠を追加"}
             </button>
           </form>
         ) : (
@@ -2350,8 +2548,8 @@ function TutorAvailabilityPage({
               <textarea value={recurringForm.note} rows={4} onChange={(event) => setRecurringForm({ ...recurringForm, note: event.target.value })} placeholder="例：毎週同じ時間の定期予約候補" />
             </label>
             {recurringEndTimeInvalid ? <p className="form-error">終了時刻は開始時刻より後に設定してください。</p> : null}
-            <button className="button primary" type="submit" disabled={recurringEndTimeInvalid}>
-              定期予約枠を追加
+            <button className="button primary" type="submit" disabled={recurringEndTimeInvalid || adminBusy}>
+              {adminBusy ? "保存中..." : "定期予約枠を追加"}
             </button>
           </form>
         )}
@@ -2364,8 +2562,137 @@ function TutorAvailabilityPage({
           month={calendarMonth}
           setMonth={setCalendarMonth}
           slots={availabilitySlots}
-          onSelectSlot={(slot) => removeAvailabilitySlot(slot.id)}
+          onSelectSlot={(slot) => void removeAvailabilitySlot(slot.id)}
         />
+      </section>
+
+      <section className="platform-card platform-form" id="purchase-offer">
+        <p className="eyebrow">Student Purchase Offer</p>
+        <h3>生徒別購入案内</h3>
+        <p className="platform-muted">25分または50分のレッスン、回数、単価、決済リンクを指定して生徒へ購入案内を送信します。入金確認後はパッケージへ反映し、領収書希望者には領収書ファイルをメール添付します。</p>
+        {!purchaseOffersReady ? <p className="form-error">購入案内を利用するには、更新後の supabase/schema.sql をSupabase SQL Editorで実行してください。空き枠登録はこのまま利用できます。</p> : null}
+        <form className="platform-form nested-form" onSubmit={sendPurchaseOffer}>
+          <div className="platform-grid two">
+            <label>
+              生徒名
+              <input value={purchaseOfferForm.name} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, name: event.target.value })} placeholder="表示名" list="learning-student-names" required />
+            </label>
+            <label>
+              生徒メールアドレス
+              <input type="email" value={purchaseOfferForm.email} onChange={(event) => {
+                const email = event.target.value;
+                const student = adminStudents.find((item) => item.email.toLowerCase() === email.toLowerCase());
+                setPurchaseOfferForm({ ...purchaseOfferForm, email, name: student?.name || purchaseOfferForm.name });
+              }} placeholder="student@example.com" list="learning-student-emails" required />
+            </label>
+          </div>
+          <datalist id="learning-student-names">
+            {adminStudents.map((student) => <option key={student.id} value={student.name || student.email}>{student.email}</option>)}
+          </datalist>
+          <datalist id="learning-student-emails">
+            {adminStudents.map((student) => <option key={student.id} value={student.email}>{student.name || student.student_id}</option>)}
+          </datalist>
+          <div className="platform-grid two">
+            <label>
+              サービス
+              <select value={purchaseOfferForm.lessonKind} onChange={(event) => {
+                const lessonKind = event.target.value as LessonKind;
+                setPurchaseOfferForm((current) => ({
+                  ...current,
+                  lessonKind,
+                  lessonMenuId: lessonKind === "japanese" ? "jp-custom-50" : "en-custom-50",
+                  packageLabel: lessonKind === "japanese" ? "1on1日本語レッスン 50分 特別パッケージ" : "英語発音コーチング 50分 特別パッケージ"
+                }));
+              }}>
+                <option value="japanese">1on1日本語レッスン</option>
+                <option value="english">英語発音コーチング</option>
+              </select>
+            </label>
+            <label>
+              コース名
+              <input value={purchaseOfferForm.packageLabel} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, packageLabel: event.target.value })} required />
+            </label>
+          </div>
+          <div className="platform-grid three">
+            <label>
+              1枠の時間
+              <select value={purchaseOfferForm.durationMinutes} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, durationMinutes: Number(event.target.value) as 25 | 50 })}>
+                <option value={25}>25分</option>
+                <option value={50}>50分</option>
+              </select>
+            </label>
+            <label>
+              発行回数
+              <input type="number" min="1" max="100" value={purchaseOfferForm.quantity} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, quantity: Number(event.target.value) })} required />
+            </label>
+            <label>
+              通貨
+              <select value={purchaseOfferForm.currency} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, currency: event.target.value as "USD" | "JPY" })}>
+                <option value="USD">USD</option>
+                <option value="JPY">JPY</option>
+              </select>
+            </label>
+          </div>
+          <div className="platform-grid three">
+            <label>
+              1枠あたり単価
+              <input type="number" min="0.01" step="0.01" value={purchaseOfferForm.unitPrice} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, unitPrice: Number(event.target.value) })} required />
+            </label>
+            <label>
+              合計
+              <input value={`${purchaseOfferForm.currency} ${(purchaseOfferForm.unitPrice * purchaseOfferForm.quantity).toLocaleString()}`} readOnly />
+            </label>
+            <label>
+              表示言語
+              <select value={purchaseOfferForm.displayLanguage} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, displayLanguage: event.target.value as PlatformLanguage })}>
+                <option value="ja">日本語</option>
+                <option value="en">English</option>
+                <option value="zh-Hant">繁體中文</option>
+              </select>
+            </label>
+          </div>
+          <div className="platform-grid two">
+            <label>
+              決済方法
+              <select value={purchaseOfferForm.paymentMethod} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod: event.target.value as "PayPal" | "PayPay" })}>
+                <option value="PayPal">PayPal</option>
+                <option value="PayPay">PayPay</option>
+              </select>
+            </label>
+            <label>
+              決済リンク
+              <input type="url" value={purchaseOfferForm.paymentLink} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paymentLink: event.target.value })} placeholder="https://..." required />
+            </label>
+          </div>
+          <label className="checkbox-row receipt-request-row">
+            <span>領収書を発行する</span>
+            <input type="checkbox" checked={purchaseOfferForm.receiptRequested} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, receiptRequested: event.target.checked })} />
+          </label>
+          {purchaseOfferForm.receiptRequested ? (
+            <label>
+              領収書宛名
+              <input value={purchaseOfferForm.receiptName} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, receiptName: event.target.value })} placeholder="未入力の場合は生徒名" />
+            </label>
+          ) : null}
+          <button className="button primary" type="submit" disabled={adminBusy || !purchaseOffersReady}>{adminBusy ? "送信中..." : "購入案内を送信"}</button>
+        </form>
+
+        <div className="record-list purchase-offer-list">
+          <h4>購入案内履歴</h4>
+          {purchaseOffers.length > 0 ? purchaseOffers.map((offer) => (
+            <article key={offer.id}>
+              <strong>{offer.offer_id} / {offer.students.name || offer.students.email}</strong>
+              <span>{offer.package_label} / {offer.duration_minutes}分 × {offer.quantity}回</span>
+              <span>{offer.currency} {Number(offer.unit_price).toLocaleString()} × {offer.quantity} = {offer.currency} {Number(offer.total_amount).toLocaleString()}</span>
+              <span>状態: {offer.status === "paid" ? "入金確認済み" : offer.status === "cancelled" ? "取消" : "入金待ち"} / 領収書: {offer.receipt_requested ? (offer.receipt_sent_at ? "送信済み" : "希望あり") : "希望なし"}</span>
+              {offer.status === "pending_payment" ? (
+                <button className="button primary" type="button" onClick={() => void markPurchaseOfferPaid(offer.id)} disabled={adminBusy}>
+                  入金確認・パッケージ反映
+                </button>
+              ) : null}
+            </article>
+          )) : <p className="platform-muted">購入案内履歴はまだありません。</p>}
+        </div>
       </section>
 
       <section className="platform-card">

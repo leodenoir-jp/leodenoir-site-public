@@ -181,6 +181,12 @@ Student Page のサインイン / サインアップは、Supabase Auth に接�
 
 `SUPABASE_SERVICE_ROLE_KEY` はサーバー側だけで使用します。GitHub、フロントエンドコード、公開ページには記載しないでください。
 
+### 講師の空き枠・生徒別購入案内
+
+講師管理画面で登録した単日・定期の空き枠は、`availability_slots` に保存され、Student Pageの候補枠へ反映されます。購入案内では25分または50分、回数、単価、PayPalまたはPayPayの決済リンクを指定できます。講師が入金確認を実行すると、生徒の保有回数へ反映し、領収書希望時は領収書ファイルをメールへ添付します。
+
+この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPal / PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
+
 ## 個別カウンセリング予約
 
 - 公開予約ページ: `/counseling/booking`

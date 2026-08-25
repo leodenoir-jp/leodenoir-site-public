@@ -320,8 +320,14 @@ async function deleteAvailability(body: Record<string, unknown>, req: ApiRequest
   const slotId = cleanText(body.slotId);
   if (!slotId) return res.status(400).json({ message: "空き枠IDが必要です。" });
   const serviceClient = await createServiceClient();
-  const { error } = await serviceClient.from("availability_slots").delete().eq("id", slotId);
+  const { data, error } = await serviceClient
+    .from("availability_slots")
+    .delete()
+    .eq("id", slotId)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) return res.status(404).json({ message: "空き枠が見つかりません。画面を更新して再度お試しください。" });
   return res.status(200).json({ message: "空き枠を削除しました。" });
 }
 

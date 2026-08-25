@@ -517,9 +517,12 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     window.localStorage.setItem(storageKey, nextLanguage);
   };
 
-  const setAvailabilitySlots = (slots: TutorAvailabilitySlot[]) => {
-    setAvailabilitySlotsBase(slots);
-    window.localStorage.setItem(availabilityStorageKey, JSON.stringify(slots));
+  const setAvailabilitySlots = (nextSlots: TutorAvailabilitySlot[] | ((current: TutorAvailabilitySlot[]) => TutorAvailabilitySlot[])) => {
+    setAvailabilitySlotsBase((current) => {
+      const resolved = typeof nextSlots === "function" ? nextSlots(current) : nextSlots;
+      window.localStorage.setItem(availabilityStorageKey, JSON.stringify(resolved));
+      return resolved;
+    });
   };
 
   const setBookings = (nextBookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => {
@@ -1863,7 +1866,7 @@ function TutorAvailabilityPage({
   studentEmail: string;
   setStudentEmail: (email: string) => void;
   availabilitySlots: TutorAvailabilitySlot[];
-  setAvailabilitySlots: (slots: TutorAvailabilitySlot[]) => void;
+  setAvailabilitySlots: (slots: TutorAvailabilitySlot[] | ((current: TutorAvailabilitySlot[]) => TutorAvailabilitySlot[])) => void;
   reviews: LessonReview[];
   setReviews: (reviews: LessonReview[]) => void;
 }) {
@@ -1873,6 +1876,8 @@ function TutorAvailabilityPage({
   const [adminToken, setAdminToken] = useState(() => window.sessionStorage.getItem(tutorAdminSessionKey) ?? "");
   const [adminMessage, setAdminMessage] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
+  const [deletingAvailabilityId, setDeletingAvailabilityId] = useState("");
+  const [availabilityDeleteMessage, setAvailabilityDeleteMessage] = useState("");
   const [purchaseOffers, setPurchaseOffers] = useState<LearningPurchaseOffer[]>([]);
   const [adminStudents, setAdminStudents] = useState<LearningAdminStudent[]>([]);
   const [purchaseOffersReady, setPurchaseOffersReady] = useState(true);
@@ -2058,16 +2063,17 @@ function TutorAvailabilityPage({
   };
 
   const removeAvailabilitySlot = async (slotId: string) => {
-    setAdminBusy(true);
-    setAdminMessage("");
+    if (deletingAvailabilityId) return;
+    setDeletingAvailabilityId(slotId);
+    setAvailabilityDeleteMessage("空き枠を削除しています...");
     try {
       const body = await postLearningAdmin({ action: "delete-availability", slotId });
-      setAvailabilitySlots(availabilitySlots.filter((slot) => slot.id !== slotId));
-      setAdminMessage(body.message || "空き枠を削除しました。");
+      setAvailabilitySlots((current) => current.filter((slot) => slot.id !== slotId));
+      setAvailabilityDeleteMessage(body.message || "空き枠を削除しました。");
     } catch (error) {
-      setAdminMessage(error instanceof Error ? error.message : "空き枠を削除できませんでした。");
+      setAvailabilityDeleteMessage(error instanceof Error ? error.message : "空き枠を削除できませんでした。");
     } finally {
-      setAdminBusy(false);
+      setDeletingAvailabilityId("");
     }
   };
 
@@ -2581,7 +2587,17 @@ function TutorAvailabilityPage({
           setMonth={setCalendarMonth}
           slots={availabilitySlots}
           onSelectSlot={(slot) => void removeAvailabilitySlot(slot.id)}
+          disabledSlotId={deletingAvailabilityId}
+          slotActionLabel="空き枠を削除"
         />
+        {availabilityDeleteMessage ? (
+          <p
+            className={availabilityDeleteMessage.includes("できません") || availabilityDeleteMessage.includes("見つかりません") ? "form-error" : "form-success"}
+            aria-live="polite"
+          >
+            {availabilityDeleteMessage}
+          </p>
+        ) : null}
       </section>
 
       <section className="platform-card platform-form" id="purchase-offer">
@@ -3393,6 +3409,8 @@ function AvailabilityCalendar({
   slots,
   selectedSlotIds = [],
   onSelectSlot,
+  disabledSlotId = "",
+  slotActionLabel = "",
   language = "ja"
 }: {
   month: Date;
@@ -3400,6 +3418,8 @@ function AvailabilityCalendar({
   slots: TutorAvailabilitySlot[];
   selectedSlotIds?: string[];
   onSelectSlot?: (slot: TutorAvailabilitySlot) => void;
+  disabledSlotId?: string;
+  slotActionLabel?: string;
   language?: PlatformLanguage;
 }) {
   const year = month.getFullYear();
@@ -3440,8 +3460,9 @@ function AvailabilityCalendar({
                     className={`calendar-booking available ${slot.deliveryMode}${selected ? " selected" : ""}`}
                     type="button"
                     onClick={() => onSelectSlot?.(slot)}
-                    disabled={!onSelectSlot}
+                    disabled={!onSelectSlot || slot.id === disabledSlotId}
                     aria-pressed={onSelectSlot ? selected : undefined}
+                    aria-label={slotActionLabel ? `${formatTime(slot.start)}-${formatTime(slot.end)} ${slot.id === disabledSlotId ? "削除中" : slotActionLabel}` : undefined}
                   >
                     {formatTime(slot.start)}-{formatTime(slot.end)} {formatDeliveryMode(slot.deliveryMode, language)}
                   </button>

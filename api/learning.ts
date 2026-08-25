@@ -216,7 +216,8 @@ async function sendEmail({
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "User-Agent": "Leo-de-Noir/1.0"
     },
     body: JSON.stringify(payload)
   });

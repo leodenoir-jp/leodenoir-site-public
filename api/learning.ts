@@ -90,29 +90,29 @@ async function createServiceClient() {
   });
 }
 
-function adminEmail() {
-  return (process.env.COUNSELING_ADMIN_LOGIN_EMAIL || "yu.leobiz001@outlook.com").trim().toLowerCase();
+function tutorAdminEmail() {
+  return (process.env.LEARNING_TUTOR_LOGIN_EMAIL || "yu.biz003@outlook.com").trim().toLowerCase();
 }
 
-function adminPassword() {
-  return process.env.COUNSELING_ADMIN_LOGIN_PASSWORD || "";
+function tutorAdminPassword() {
+  return process.env.LEARNING_TUTOR_LOGIN_PASSWORD || "";
 }
 
-function adminSecret() {
-  return process.env.COUNSELING_ADMIN_SESSION_SECRET
+function tutorAdminSecret() {
+  return process.env.LEARNING_TUTOR_SESSION_SECRET
     || process.env.SUPABASE_SERVICE_ROLE_KEY
     || process.env.RESEND_API_KEY
-    || adminPassword();
+    || tutorAdminPassword();
 }
 
 async function signAdminPayload(payload: string) {
   const { createHmac } = await import("node:crypto");
-  return createHmac("sha256", adminSecret()).update(payload).digest("base64url");
+  return createHmac("sha256", tutorAdminSecret()).update(payload).digest("base64url");
 }
 
 async function createAdminSession(email: string, password: string) {
   const normalizedEmail = email.trim().toLowerCase();
-  if (!adminPassword() || normalizedEmail !== adminEmail() || password !== adminPassword()) throw new Error("Unauthorized");
+  if (!tutorAdminPassword() || normalizedEmail !== tutorAdminEmail() || password !== tutorAdminPassword()) throw new Error("Unauthorized");
   const payload = Buffer.from(JSON.stringify({
     email: normalizedEmail,
     exp: Date.now() + 1000 * 60 * 60 * 8
@@ -127,7 +127,7 @@ async function verifyAdminSession(token: string) {
   if (!payload || !signature || signature !== await signAdminPayload(payload)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { email?: string; exp?: number };
-    if (parsed.email !== adminEmail() || !parsed.exp || parsed.exp < Date.now()) return null;
+    if (parsed.email !== tutorAdminEmail() || !parsed.exp || parsed.exp < Date.now()) return null;
     return parsed;
   } catch {
     return null;

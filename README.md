@@ -185,6 +185,8 @@ Student Page のサインイン / サインアップは、Supabase Auth に接�
 
 講師管理画面で登録した単日・定期の空き枠は、`availability_slots` に保存され、Student Pageの候補枠へ反映されます。購入案内では25分または50分、回数、単価、PayPalまたはPayPayの決済リンクを指定できます。単価はUSDでは0〜100ドル、JPYでは0〜30,000円（10,000円までは500円刻み、それ以降は1,000円刻み）で設定できます。講師が入金確認を実行すると、生徒の保有回数へ反映し、領収書希望時は領収書ファイルをメールへ添付します。
 
+Learning講師画面のログイン情報は、`LEARNING_TUTOR_LOGIN_EMAIL`と`LEARNING_TUTOR_LOGIN_PASSWORD`で管理します。署名用の`LEARNING_TUTOR_SESSION_SECRET`には、十分に長いランダムな値を設定してください。個別カウンセリング管理画面の`COUNSELING_ADMIN_*`とは分離されています。
+
 この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPal / PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
 
 ## 個別カウンセリング予約

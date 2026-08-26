@@ -180,6 +180,19 @@ function formatMoney(amount: number, currency: "USD" | "JPY") {
   }).format(amount);
 }
 
+function calculatePurchaseTotal(unitPrice: number, quantity: number, currency: "USD" | "JPY", paypalFeeIncluded: boolean) {
+  const baseTotal = unitPrice * quantity;
+  if (!paypalFeeIncluded) return baseTotal;
+  const total = baseTotal * 1.041;
+  return currency === "JPY" ? Math.round(total) : Math.round(total * 100) / 100;
+}
+
+function includesPaypalFee(offer: PurchaseOfferRecord) {
+  if (offer.payment_method !== "PayPal") return false;
+  const baseTotal = Number(offer.unit_price) * Number(offer.quantity);
+  return Number(offer.total_amount) > baseTotal + (offer.currency === "JPY" ? 0.5 : 0.005);
+}
+
 function renderEmailHtml(content: string) {
   return `<div style="font-family:'Yu Gothic','游ゴシック',YuGothic,'Hiragino Kaku Gothic ProN',Meiryo,Arial,sans-serif;color:#111827;line-height:1.75;font-size:15px">${content}</div>`;
 }
@@ -234,6 +247,9 @@ async function sendEmail({
       statusText: response.statusText,
       errorBody
     });
+    if (response.status === 403 && /only send testing emails|verify a domain|resend\.dev/i.test(errorBody)) {
+      throw new Error("Resend testing domain restriction.");
+    }
     throw new Error("Failed to send email.");
   }
   const result = await response.json().catch(() => ({})) as { id?: string };
@@ -405,23 +421,24 @@ function purchaseOfferCopy(offer: PurchaseOfferRecord) {
   const total = formatMoney(Number(offer.total_amount), offer.currency);
   const unit = formatMoney(Number(offer.unit_price), offer.currency);
   const link = offer.payment_link;
+  const paypalFeeIncluded = includesPaypalFee(offer);
   if (offer.display_language === "en") {
     return {
       subject: "Lesson package purchase information",
-      text: `${offer.students.name || offer.students.email},\n\nYour lesson package purchase information is ready.\n\nPackage: ${offer.package_label}\nDuration: ${offer.duration_minutes} minutes\nLessons: ${offer.quantity}\nUnit price: ${unit}\nTotal: ${total}\nPayment: ${offer.payment_method}\nPayment link: ${link}\n\nAfter completing payment, please reply to this email. Your package will be added after payment is confirmed.`,
+      text: `${offer.students.name || offer.students.email},\n\nYour lesson package purchase information is ready.\n\nPackage: ${offer.package_label}\nDuration: ${offer.duration_minutes} minutes\nLessons: ${offer.quantity}\nUnit price: ${unit}\nTotal: ${total}${paypalFeeIncluded ? " (includes the 4.1% PayPal processing fee)" : ""}\nPayment: ${offer.payment_method}\nPayment link: ${link}\n\nAfter completing payment, please reply to this email. Your package will be added after payment is confirmed.`,
       receiptLabel: "Receipt"
     };
   }
   if (offer.display_language === "zh-Hant") {
     return {
       subject: "課程套組購買資訊",
-      text: `${offer.students.name || offer.students.email} 您好：\n\n以下是您的課程套組購買資訊。\n\n套組：${offer.package_label}\n時長：${offer.duration_minutes}分鐘\n堂數：${offer.quantity}\n單價：${unit}\n總額：${total}\n付款方式：${offer.payment_method}\n付款連結：${link}\n\n完成付款後請回覆此郵件。確認入帳後，課程堂數將加入您的帳戶。`,
+      text: `${offer.students.name || offer.students.email} 您好：\n\n以下是您的課程套組購買資訊。\n\n套組：${offer.package_label}\n時長：${offer.duration_minutes}分鐘\n堂數：${offer.quantity}\n單價：${unit}\n總額：${total}${paypalFeeIncluded ? "（含4.1% PayPal付款手續費）" : ""}\n付款方式：${offer.payment_method}\n付款連結：${link}\n\n完成付款後請回覆此郵件。確認入帳後，課程堂數將加入您的帳戶。`,
       receiptLabel: "收據"
     };
   }
   return {
     subject: "レッスンパッケージ購入のご案内",
-    text: `${offer.students.name || offer.students.email} 様\n\nレッスンパッケージの購入内容と決済方法をご案内します。\n\nパッケージ：${offer.package_label}\n時間：${offer.duration_minutes}分\n回数：${offer.quantity}回\n1回あたり：${unit}\n合計：${total}\n決済方法：${offer.payment_method}\n決済リンク：${link}\n\nお支払い完了後、このメールへご返信ください。入金確認後、レッスン回数をアカウントへ反映します。`,
+    text: `${offer.students.name || offer.students.email} 様\n\nレッスンパッケージの購入内容と決済方法をご案内します。\n\nパッケージ：${offer.package_label}\n時間：${offer.duration_minutes}分\n回数：${offer.quantity}回\n1回あたり：${unit}\n合計：${total}${paypalFeeIncluded ? "（PayPal決済手数料4.1%を含みます）" : ""}\n決済方法：${offer.payment_method}\n決済リンク：${link}\n\nお支払い完了後、このメールへご返信ください。入金確認後、レッスン回数をアカウントへ反映します。`,
     receiptLabel: "領収書"
   };
 }
@@ -438,6 +455,7 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   const currency = cleanText(body.currency) === "JPY" ? "JPY" : "USD";
   const unitPrice = Number(body.unitPrice);
   const paymentMethod = cleanText(body.paymentMethod) === "PayPay" ? "PayPay" : "PayPal";
+  const paypalFeeIncluded = paymentMethod === "PayPal" && body.paypalFeeIncluded === true;
   const paymentLink = cleanText(body.paymentLink);
   const receiptRequested = body.receiptRequested === true;
   const receiptName = cleanText(body.receiptName);
@@ -458,7 +476,7 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
     quantity,
     currency,
     unit_price: unitPrice,
-    total_amount: unitPrice * quantity,
+    total_amount: calculatePurchaseTotal(unitPrice, quantity, currency, paypalFeeIncluded),
     payment_method: paymentMethod,
     payment_link: paymentLink,
     receipt_requested: receiptRequested,
@@ -500,7 +518,8 @@ function buildReceiptHtml(offer: PurchaseOfferRecord) {
     : offer.display_language === "zh-Hant"
       ? { title: "收據", recipient: "付款人", amount: "金額", service: "服務內容", method: "付款方式", date: "開立日期", issuer: "開立人", note: "上述款項已收訖。" }
       : { title: "領収書", recipient: "宛名", amount: "金額", service: "但し書き", method: "支払方法", date: "発行日", issuer: "発行者", note: "上記金額を正に領収いたしました。" };
-  return `<!doctype html><html lang="${offer.display_language}"><head><meta charset="utf-8"><title>${copy.title} ${offer.offer_id}</title><style>body{font-family:'Yu Gothic','游ゴシック',YuGothic,Meiryo,sans-serif;color:#111827;margin:48px}.receipt{max-width:760px;margin:auto;border:1px solid #94a3b8;padding:40px}.brand{color:#0f2742;font-size:14px}.title{text-align:center;font-size:30px;margin:18px 0 34px}.amount{font-size:24px;font-weight:700;border-bottom:2px solid #0f2742;padding:8px 0}dl{display:grid;grid-template-columns:150px 1fr;gap:12px;margin:30px 0}dt{color:#475569}dd{margin:0}.footer{margin-top:42px;border-top:1px solid #cbd5e1;padding-top:18px}.id{font-size:12px;color:#64748b}</style></head><body><main class="receipt"><p class="brand">Leo de Noir / Workaholic Owl</p><h1 class="title">${copy.title}</h1><p class="id">No. ${escapeHtml(offer.offer_id)}</p><dl><dt>${copy.recipient}</dt><dd>${escapeHtml(receiptName)}</dd><dt>${copy.amount}</dt><dd class="amount">${escapeHtml(total)}</dd><dt>${copy.service}</dt><dd>${escapeHtml(`${offer.package_label} ${offer.duration_minutes}分 × ${offer.quantity}回`)}</dd><dt>${copy.method}</dt><dd>${escapeHtml(offer.payment_method)}</dd><dt>${copy.date}</dt><dd>${escapeHtml(new Date().toLocaleDateString(offer.display_language === "ja" ? "ja-JP" : offer.display_language === "zh-Hant" ? "zh-TW" : "en-US", { timeZone: "Asia/Tokyo" }))}</dd><dt>${copy.issuer}</dt><dd>Leo de Noir / Workaholic Owl<br>運営者：請井 悠貴子<br>${ownerEmail}</dd></dl><p>${copy.note}</p><div class="footer">https://leodenoir.com</div></main></body></html>`;
+  const serviceDescription = `${offer.package_label} ${offer.duration_minutes}分 × ${offer.quantity}回${includesPaypalFee(offer) ? "（決済手数料込み）" : ""}`;
+  return `<!doctype html><html lang="${offer.display_language}"><head><meta charset="utf-8"><title>${copy.title} ${offer.offer_id}</title><style>body{font-family:'Yu Gothic','游ゴシック',YuGothic,Meiryo,sans-serif;color:#111827;margin:48px}.receipt{max-width:760px;margin:auto;border:1px solid #94a3b8;padding:40px}.brand{color:#0f2742;font-size:14px}.title{text-align:center;font-size:30px;margin:18px 0 34px}.amount{font-size:24px;font-weight:700;border-bottom:2px solid #0f2742;padding:8px 0}dl{display:grid;grid-template-columns:150px 1fr;gap:12px;margin:30px 0}dt{color:#475569}dd{margin:0}.footer{margin-top:42px;border-top:1px solid #cbd5e1;padding-top:18px}.id{font-size:12px;color:#64748b}</style></head><body><main class="receipt"><p class="brand">Leo de Noir / Workaholic Owl</p><h1 class="title">${copy.title}</h1><p class="id">No. ${escapeHtml(offer.offer_id)}</p><dl><dt>${copy.recipient}</dt><dd>${escapeHtml(receiptName)}</dd><dt>${copy.amount}</dt><dd class="amount">${escapeHtml(total)}</dd><dt>${copy.service}</dt><dd>${escapeHtml(serviceDescription)}</dd><dt>${copy.method}</dt><dd>${escapeHtml(offer.payment_method)}</dd><dt>${copy.date}</dt><dd>${escapeHtml(new Date().toLocaleDateString(offer.display_language === "ja" ? "ja-JP" : offer.display_language === "zh-Hant" ? "zh-TW" : "en-US", { timeZone: "Asia/Tokyo" }))}</dd><dt>${copy.issuer}</dt><dd>Leo de Noir / Workaholic Owl<br>運営者：請井 悠貴子<br>${ownerEmail}</dd></dl><p>${copy.note}</p><div class="footer">https://leodenoir.com</div></main></body></html>`;
 }
 
 async function markOfferPaid(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
@@ -606,6 +625,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     }
     if (message === "Failed to send email.") {
       return res.status(502).json({ message: "メール送信サービスでエラーが発生しました。時間をおいて再度お試しください。" });
+    }
+    if (message === "Resend testing domain restriction.") {
+      return res.status(502).json({ message: "Resendの送信元がテスト用ドメインのため、生徒のメールアドレスへ送信できません。leodenoir.comのドメイン認証と送信元設定を確認してください。" });
     }
     return res.status(500).json({ message: "処理を完了できませんでした。時間をおいて再度お試しください。" });
   }

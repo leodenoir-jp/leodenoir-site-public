@@ -1907,6 +1907,7 @@ function TutorAvailabilityPage({
     currency: "USD" as "USD" | "JPY",
     unitPrice: 28,
     paymentMethod: "PayPal" as "PayPal" | "PayPay",
+    paypalFeeIncluded: false,
     paymentLink: "",
     receiptRequested: true,
     receiptName: "",
@@ -1932,6 +1933,10 @@ function TutorAvailabilityPage({
     weekdays: [1, 3, 5]
   });
   const isOwner = Boolean(adminToken);
+  const purchaseOfferBaseTotal = purchaseOfferForm.unitPrice * purchaseOfferForm.quantity;
+  const purchaseOfferTotal = purchaseOfferForm.paymentMethod === "PayPal" && purchaseOfferForm.paypalFeeIncluded
+    ? (purchaseOfferForm.currency === "JPY" ? Math.round(purchaseOfferBaseTotal * 1.041) : Math.round(purchaseOfferBaseTotal * 1.041 * 100) / 100)
+    : purchaseOfferBaseTotal;
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
@@ -2728,7 +2733,7 @@ function TutorAvailabilityPage({
             </label>
             <label>
               合計
-              <input value={`${purchaseOfferForm.currency} ${(purchaseOfferForm.unitPrice * purchaseOfferForm.quantity).toLocaleString()}`} readOnly />
+              <input value={`${purchaseOfferForm.currency} ${purchaseOfferTotal.toLocaleString(undefined, { minimumFractionDigits: purchaseOfferForm.currency === "USD" && !Number.isInteger(purchaseOfferTotal) ? 2 : 0, maximumFractionDigits: purchaseOfferForm.currency === "USD" ? 2 : 0 })}`} readOnly />
             </label>
             <label>
               表示言語
@@ -2742,7 +2747,10 @@ function TutorAvailabilityPage({
           <div className="platform-grid two">
             <label>
               決済方法
-              <select value={purchaseOfferForm.paymentMethod} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod: event.target.value as "PayPal" | "PayPay" })}>
+              <select value={purchaseOfferForm.paymentMethod} onChange={(event) => {
+                const paymentMethod = event.target.value as "PayPal" | "PayPay";
+                setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod, paypalFeeIncluded: paymentMethod === "PayPal" ? purchaseOfferForm.paypalFeeIncluded : false });
+              }}>
                 <option value="PayPal">PayPal</option>
                 <option value="PayPay">PayPay</option>
               </select>
@@ -2752,6 +2760,16 @@ function TutorAvailabilityPage({
               <input type="url" value={purchaseOfferForm.paymentLink} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paymentLink: event.target.value })} placeholder="https://..." required />
             </label>
           </div>
+          {purchaseOfferForm.paymentMethod === "PayPal" ? (
+            <label className="checkbox-row receipt-request-row">
+              <span>PayPal決済手数料4.1%を請求額に加算する</span>
+              <input
+                type="checkbox"
+                checked={purchaseOfferForm.paypalFeeIncluded}
+                onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paypalFeeIncluded: event.target.checked })}
+              />
+            </label>
+          ) : null}
           <label className="checkbox-row receipt-request-row">
             <span>領収書を発行する</span>
             <input type="checkbox" checked={purchaseOfferForm.receiptRequested} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, receiptRequested: event.target.checked })} />

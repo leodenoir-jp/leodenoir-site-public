@@ -113,21 +113,21 @@ export const platformUi = {
   ja: {
     requestLesson: "予約リクエストを送る",
     dashboard: "受講者ダッシュボード",
-    notLivePayment: "購入希望の送信後、内容確認のうえPayPalまたはPayPayの支払い案内をメールでお送りします。",
+    notLivePayment: "購入希望の送信後、内容確認のうえPayPalまたはPayPayの支払い案内をメールでお送りします。PayPalを選択した場合は4.1%の決済手数料が加算されます。",
     timezone: "表示タイムゾーン",
     approvalRequired: "日程調整後にご案内"
   },
   en: {
     requestLesson: "Send booking request",
     dashboard: "Student dashboard",
-    notLivePayment: "After you send a purchase request, payment instructions for PayPal or PayPay will be shared by email.",
+    notLivePayment: "After you send a purchase request, payment instructions for PayPal or PayPay will be shared by email. A 4.1% processing fee is added when PayPal is selected.",
     timezone: "Display timezone",
     approvalRequired: "Schedule details by email"
   },
   "zh-Hant": {
     requestLesson: "送出預約申請",
     dashboard: "學生儀表板",
-    notLivePayment: "送出購買申請後，將透過電子郵件提供 PayPal 或 PayPay 付款資訊。",
+    notLivePayment: "送出購買申請後，將透過電子郵件提供 PayPal 或 PayPay 付款資訊。選擇 PayPal 時將加收 4.1% 付款手續費。",
     timezone: "顯示時區",
     approvalRequired: "日程確認後以郵件通知"
   }
@@ -146,21 +146,21 @@ export const lessonProducts: LessonProduct[] = [
         title: "知っている日本語から、伝わる日本語へ。",
         summary: "仕事・面接・日常会話で自然に使える日本語を、目的に合わせて練習する1on1レッスンです。",
         outcomes: ["自然な言い換えと敬語", "面接・職場会話の練習", "発音・イントネーション確認", "日本語で考えを整理する力"],
-        method: ["オンライン・対面の受講形式に対応", "目的に合わせて内容を調整", "購入希望の送信後、PayPalまたはPayPayの支払い案内をメールでお送りします"]
+        method: ["オンライン・対面の受講形式に対応", "目的に合わせて内容を調整", "PayPal選択時はレッスン料金に4.1%の決済手数料を加算"]
       },
       en: {
         eyebrow: "1-on-1 Japanese Lessons",
         title: "Japanese that communicates.",
         summary: "A practical online lesson for interviews, work conversations, and natural daily communication.",
         outcomes: ["Natural phrasing and keigo", "Interview and workplace practice", "Pronunciation and intonation checks", "Organizing thoughts in Japanese"],
-        method: ["Online and in-person formats available", "Lesson content is adjusted to your goals", "Payment instructions for PayPal or PayPay are shared by email after review"]
+        method: ["Online and in-person formats available", "Lesson content is adjusted to your goals", "A 4.1% processing fee is added when PayPal is selected"]
       },
       "zh-Hant": {
         eyebrow: "線上日語課",
         title: "從知道日語，到能自然傳達。",
         summary: "依照面試、工作與日常溝通目標設計的實用線上日語課。",
         outcomes: ["自然表達與敬語", "面試與職場會話練習", "發音與語調確認", "用日語整理想法"],
-        method: ["可選擇線上或面對面課程", "依照學習目標調整內容", "確認購買申請後，將以電子郵件提供 PayPal 或 PayPay 付款資訊"]
+        method: ["可選擇線上或面對面課程", "依照學習目標調整內容", "選擇 PayPal 時將加收 4.1% 付款手續費"]
       }
     },
     packageOptions: [
@@ -181,21 +181,21 @@ export const lessonProducts: LessonProduct[] = [
         title: "伝わる英語は、発音から整える。",
         summary: "日本語話者が聞き返されにくい英語へ近づくための、口・舌・息・リズムに特化したオンラインコーチングです。",
         outcomes: ["日本語話者が苦手な音の整理", "面接・会議・プレゼンの音読練習", "録音フィードバック", "話す負担を減らす発音設計"],
-        method: ["オンライン・対面の受講形式に対応", "目的に合わせて発音課題を整理", "購入希望の送信後、PayPalまたはPayPayの支払い案内をメールでお送りします"]
+        method: ["オンライン・対面の受講形式に対応", "目的に合わせて発音課題を整理", "PayPal選択時はレッスン料金に4.1%の決済手数料を加算"]
       },
       en: {
         eyebrow: "English Pronunciation Coaching",
         title: "Clearer English starts with pronunciation.",
         summary: "A focused online coaching program for Japanese speakers to improve clarity, rhythm, and confidence.",
         outcomes: ["Sounds Japanese speakers often struggle with", "Interview, meeting, and presentation read-aloud practice", "Recording-based feedback", "Pronunciation design that reduces speaking load"],
-        method: ["Online and in-person formats available", "Pronunciation focus is adjusted to your goals", "Payment instructions for PayPal or PayPay are shared by email after review"]
+        method: ["Online and in-person formats available", "Pronunciation focus is adjusted to your goals", "A 4.1% processing fee is added when PayPal is selected"]
       },
       "zh-Hant": {
         eyebrow: "英語發音教練",
         title: "更容易傳達的英語，從發音開始整理。",
         summary: "為日語母語者設計，聚焦口型、舌位、氣息、節奏與清晰度的線上發音教練。",
         outcomes: ["整理日語母語者常卡住的音", "面試、會議、簡報朗讀練習", "錄音回饋", "降低開口負擔的發音設計"],
-        method: ["可選擇線上或面對面課程", "依照目標調整發音練習重點", "確認購買申請後，將以電子郵件提供 PayPal 或 PayPay 付款資訊"]
+        method: ["可選擇線上或面對面課程", "依照目標調整發音練習重點", "選擇 PayPal 時將加收 4.1% 付款手續費"]
       }
     },
     packageOptions: [

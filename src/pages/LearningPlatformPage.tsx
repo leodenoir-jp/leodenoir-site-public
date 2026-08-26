@@ -106,6 +106,7 @@ type LearningAdminStudent = {
   student_id: string;
   email: string;
   name: string | null;
+  zoom_link: string | null;
 };
 
 type LearningPurchaseOffer = {
@@ -1885,6 +1886,7 @@ function TutorAvailabilityPage({
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
+  const [studentRegistrationForm, setStudentRegistrationForm] = useState({ studentId: "", name: "", email: "" });
   const [lessonNoteDrafts, setLessonNoteDrafts] = useState<Record<string, string>>({});
   const [lessonNoteMessages, setLessonNoteMessages] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
@@ -1942,7 +1944,19 @@ function TutorAvailabilityPage({
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
     booking.status === "approved" && isPastBooking(booking.requestedSlot) && !booking.lessonNoteSent
   ));
-  const studentPackageSummaries = buildStudentPackageSummaries(bookings, customer, studentProfiles);
+  const adminStudentProfiles: StudentProfile[] = adminStudents.map((student) => ({
+    studentId: student.student_id,
+    name: student.name || student.email,
+    email: student.email.toLowerCase(),
+    provider: "email",
+    createdAt: "",
+    zoomLink: student.zoom_link || ""
+  }));
+  const mergedStudentProfiles = [
+    ...studentProfiles.filter((profile) => !adminStudentProfiles.some((adminProfile) => adminProfile.email === profile.email.toLowerCase())),
+    ...adminStudentProfiles
+  ];
+  const studentPackageSummaries = buildStudentPackageSummaries(bookings, customer, mergedStudentProfiles);
   const filteredStudentPackageSummaries = studentPackageSummaries.filter((summary) => {
     const keyword = studentSearch.trim().toLowerCase();
     if (!keyword) return true;
@@ -1956,7 +1970,7 @@ function TutorAvailabilityPage({
   });
   const recurringEndTimeInvalid = timeToMinutes(recurringForm.endTime) <= timeToMinutes(recurringForm.startTime);
   const selectedTutorBookingZoomLink = selectedTutorBooking
-    ? studentProfiles.find((profile) => profile.email.toLowerCase() === selectedTutorBooking.studentEmail.toLowerCase())?.zoomLink ?? ""
+    ? mergedStudentProfiles.find((profile) => profile.email.toLowerCase() === selectedTutorBooking.studentEmail.toLowerCase())?.zoomLink ?? ""
     : "";
 
   const mapAdminSlot = (slot: Record<string, unknown>): TutorAvailabilitySlot => ({
@@ -2100,6 +2114,33 @@ function TutorAvailabilityPage({
         ))
       : [...studentProfiles, { ...nextProfile, zoomLink }];
     setStudentProfiles(nextProfiles);
+    setAdminStudents((current) => current.map((student) => (
+      student.email.toLowerCase() === normalizedEmail ? { ...student, zoom_link: zoomLink } : student
+    )));
+  };
+
+  const registerStudent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAdminBusy(true);
+    setAdminMessage("");
+    try {
+      const body = await postLearningAdmin<{ student?: LearningAdminStudent }>({
+        action: "upsert-student",
+        ...studentRegistrationForm
+      });
+      if (body.student) {
+        setAdminStudents((current) => [
+          body.student as LearningAdminStudent,
+          ...current.filter((student) => student.id !== body.student?.id)
+        ]);
+      }
+      setStudentRegistrationForm({ studentId: "", name: "", email: "" });
+      setAdminMessage(body.message || "生徒情報を登録しました。");
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "生徒情報を登録できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
   const updateLessonNoteDraft = (bookingId: string, note: string) => {
@@ -2400,6 +2441,40 @@ function TutorAvailabilityPage({
 
         <section className="platform-card" id="student-package-summary">
           <h3>生徒別パッケージ一覧</h3>
+          <form onSubmit={registerStudent} className="platform-form">
+            <p className="platform-muted">既存のStudent IDを使う生徒は、ここで登録すると一覧とZoomリンク設定に反映されます。</p>
+            <div className="platform-grid two">
+              <label>
+                Student ID
+                <input
+                  value={studentRegistrationForm.studentId}
+                  onChange={(event) => setStudentRegistrationForm({ ...studentRegistrationForm, studentId: event.target.value })}
+                  placeholder="7852-85"
+                  required
+                />
+              </label>
+              <label>
+                生徒名
+                <input
+                  value={studentRegistrationForm.name}
+                  onChange={(event) => setStudentRegistrationForm({ ...studentRegistrationForm, name: event.target.value })}
+                  placeholder="Emma"
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              メールアドレス
+              <input
+                type="email"
+                value={studentRegistrationForm.email}
+                onChange={(event) => setStudentRegistrationForm({ ...studentRegistrationForm, email: event.target.value })}
+                placeholder="student@example.com"
+                required
+              />
+            </label>
+            <button className="button secondary" type="submit" disabled={adminBusy}>生徒情報を登録</button>
+          </form>
           <label className="student-search-field">
             生徒検索
             <input
@@ -3731,7 +3806,7 @@ function generateStudentId(profiles: StudentProfile[]) {
   return id;
 }
 
-function buildStudentPackageSummary(email: string, bookings: BookingRecord[], customer: CustomerRecord, studentId?: string, zoomLink?: string) {
+function buildStudentPackageSummary(email: string, bookings: BookingRecord[], customer: CustomerRecord, studentId?: string, zoomLink?: string, studentName?: string) {
   const credits = getStudentLessonCredits(email, customer);
   const purchased = credits.reduce((total, credit) => total + credit.purchasedLessons, 0);
   const completed = bookings.filter((booking) => booking.studentEmail.toLowerCase() === email.toLowerCase() && booking.status === "approved" && isPastBooking(booking.requestedSlot)).length;
@@ -3751,7 +3826,7 @@ function buildStudentPackageSummary(email: string, bookings: BookingRecord[], cu
 
   return {
     email,
-    name: customer.email.toLowerCase() === email.toLowerCase() ? customer.name : email,
+    name: studentName || (customer.email.toLowerCase() === email.toLowerCase() ? customer.name : email),
     studentId: studentId ?? "未発行",
     purchased,
     reserved,
@@ -3765,10 +3840,14 @@ function buildStudentPackageSummary(email: string, bookings: BookingRecord[], cu
 }
 
 function buildStudentPackageSummaries(bookings: BookingRecord[], customer: CustomerRecord, profiles: StudentProfile[]) {
-  const emails = Array.from(new Set([customer.email, ...bookings.map((booking) => booking.studentEmail.toLowerCase())]));
+  const emails = Array.from(new Set([
+    customer.email.toLowerCase(),
+    ...bookings.map((booking) => booking.studentEmail.toLowerCase()),
+    ...profiles.map((profile) => profile.email.toLowerCase())
+  ]));
   return emails.map((email) => {
     const profile = profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
-    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId, profile?.zoomLink);
+    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId, profile?.zoomLink, profile?.name);
   });
 }
 

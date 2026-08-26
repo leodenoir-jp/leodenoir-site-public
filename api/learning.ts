@@ -310,7 +310,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
   const [slotsResult, offersResult, studentsResult] = await Promise.all([
     serviceClient.from("availability_slots").select("id,starts_at,ends_at,timezone,delivery_mode,note").order("starts_at", { ascending: true }),
     serviceClient.from("lesson_purchase_offers").select("*,students(id,student_id,email,name)").order("offered_at", { ascending: false }),
-    serviceClient.from("students").select("id,student_id,email,name").order("created_at", { ascending: false })
+    serviceClient.from("students").select("id,student_id,email,name,zoom_link").order("created_at", { ascending: false })
   ]);
   if (slotsResult.error) throw slotsResult.error;
   const purchaseOffersReady = !offersResult.error;
@@ -334,6 +334,48 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
     purchaseOffersReady,
     studentsReady
   });
+}
+
+async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  const email = cleanText(body.email).toLowerCase();
+  const name = cleanText(body.name) || email.split("@")[0];
+
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId) || !emailPattern.test(email)) {
+    return res.status(400).json({ message: "Student IDとメールアドレスを確認してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const [emailResult, idResult] = await Promise.all([
+    serviceClient.from("students").select("id,student_id,email,name,zoom_link").eq("email", email).maybeSingle(),
+    serviceClient.from("students").select("id,student_id,email,name,zoom_link").eq("student_id", studentId).maybeSingle()
+  ]);
+  if (emailResult.error) throw emailResult.error;
+  if (idResult.error) throw idResult.error;
+  if (emailResult.data && idResult.data && emailResult.data.id !== idResult.data.id) {
+    return res.status(409).json({ message: "Student IDとメールアドレスが別々の生徒に登録されています。" });
+  }
+
+  const existing = emailResult.data ?? idResult.data;
+  if (existing) {
+    const { data, error } = await serviceClient
+      .from("students")
+      .update({ student_id: studentId, email, name, updated_at: new Date().toISOString() })
+      .eq("id", existing.id)
+      .select("id,student_id,email,name,zoom_link")
+      .single();
+    if (error) throw error;
+    return res.status(200).json({ message: "生徒情報を更新しました。", student: data });
+  }
+
+  const { data, error } = await serviceClient
+    .from("students")
+    .insert({ student_id: studentId, email, name, provider: "email" })
+    .select("id,student_id,email,name,zoom_link")
+    .single();
+  if (error) throw error;
+  return res.status(200).json({ message: "生徒情報を登録しました。", student: data });
 }
 
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
@@ -613,6 +655,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "admin-login") return await loginTutor(body, res);
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
+    if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);
     return res.status(400).json({ message: "Unknown action." });

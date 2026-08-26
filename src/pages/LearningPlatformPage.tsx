@@ -1886,6 +1886,7 @@ function TutorAvailabilityPage({
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
+  const [activeTutorTab, setActiveTutorTab] = useState<"overview" | "students" | "availability" | "preview" | "purchase" | "reviews">("overview");
   const [studentRegistrationForm, setStudentRegistrationForm] = useState({ studentId: "", name: "", email: "" });
   const [lessonNoteDrafts, setLessonNoteDrafts] = useState<Record<string, string>>({});
   const [lessonNoteMessages, setLessonNoteMessages] = useState<Record<string, string>>({});
@@ -2404,6 +2405,28 @@ function TutorAvailabilityPage({
 
       {adminMessage ? <p className={adminMessage.includes("できません") || adminMessage.includes("失敗") ? "form-error" : "form-success"}>{adminMessage}</p> : null}
 
+      <nav className="tutor-admin-tabs" aria-label="講師管理メニュー">
+        {([
+          ["overview", "予約・レッスン"],
+          ["students", "生徒別パッケージ"],
+          ["availability", "空き時間登録"],
+          ["preview", "Student表示"],
+          ["purchase", "購入案内"],
+          ["reviews", "レビュー管理"]
+        ] as const).map(([tab, label]) => (
+          <button
+            className={activeTutorTab === tab ? "active" : ""}
+            key={tab}
+            type="button"
+            onClick={() => setActiveTutorTab(tab)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTutorTab === "overview" ? (
+      <>
       <section className="platform-card">
         <h3>予約リクエスト管理</h3>
         <p className="platform-muted">生徒から送信された予約リクエストを確認し、承認または見送りを選択できます。承認時は生徒と講師へメール通知を送信します。</p>
@@ -2426,19 +2449,52 @@ function TutorAvailabilityPage({
         </div>
       </section>
 
-      <div className="platform-grid two">
-        <section className="platform-card">
-          <h3>予約カレンダー</h3>
-          <p className="platform-muted">予約済み・リクエスト中の枠をクリックすると、受講者とパッケージ消化状況を確認できます。</p>
-          <BookingCalendar
-            month={bookingCalendarMonth}
-            setMonth={setBookingCalendarMonth}
-            bookings={bookings.filter((booking) => booking.status !== "cancelled")}
-            onSelectBooking={setSelectedTutorBooking}
-            language="ja"
-          />
-        </section>
+      <section className="platform-card">
+        <h3>予約カレンダー</h3>
+        <p className="platform-muted">予約済み・リクエスト中の枠をクリックすると、受講者とパッケージ消化状況を確認できます。</p>
+        <BookingCalendar
+          month={bookingCalendarMonth}
+          setMonth={setBookingCalendarMonth}
+          bookings={bookings.filter((booking) => booking.status !== "cancelled")}
+          onSelectBooking={setSelectedTutorBooking}
+          language="ja"
+        />
+      </section>
 
+      <section className="platform-card platform-form">
+        <h3>レッスンノート未送信</h3>
+        <p className="platform-muted">完了済みレッスンのうち、レッスンノート送信が未完了のものを表示します。記載後に完了を押すと、生徒宛にメール送信されます。</p>
+        <div className="record-list">
+          {completedBookingsWithoutNotes.length > 0 ? completedBookingsWithoutNotes.map((booking) => (
+            <article key={booking.id} className="lesson-note-record">
+              <strong>{booking.id} / {booking.student}</strong>
+              <span>{formatLessonKind(booking.lessonKind, "ja")} / {formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
+              <span>送信先: {booking.studentEmail}</span>
+              {lessonNoteMessages[booking.id] ? (
+                <p className={lessonNoteMessages[booking.id].startsWith("送信完了") ? "form-success" : "form-error"}>
+                  {lessonNoteMessages[booking.id]}
+                </p>
+              ) : null}
+              <label>
+                レッスンノート
+                <textarea
+                  value={lessonNoteDrafts[booking.id] ?? booking.reason ?? ""}
+                  rows={5}
+                  onChange={(event) => updateLessonNoteDraft(booking.id, event.target.value)}
+                  placeholder="生徒へ共有するレッスン内容、宿題、次回に向けたメモを入力"
+                />
+              </label>
+              <button className="button primary" type="button" onClick={() => void sendLessonNote(booking)} disabled={!(lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim()}>
+                完了
+              </button>
+            </article>
+          )) : <p className="platform-muted">レッスンノート未送信の完了レッスンはありません。</p>}
+        </div>
+      </section>
+      </>
+      ) : null}
+
+      {activeTutorTab === "students" ? (
         <section className="platform-card" id="student-package-summary">
           <h3>生徒別パッケージ一覧</h3>
           <form onSubmit={registerStudent} className="platform-form">
@@ -2517,39 +2573,9 @@ function TutorAvailabilityPage({
             {filteredStudentPackageSummaries.length === 0 ? <p className="platform-muted">該当する生徒は見つかりません。</p> : null}
           </div>
         </section>
-      </div>
+      ) : null}
 
-      <section className="platform-card platform-form">
-        <h3>レッスンノート未送信</h3>
-        <p className="platform-muted">完了済みレッスンのうち、レッスンノート送信が未完了のものを表示します。記載後に完了を押すと、生徒宛にメール送信されます。</p>
-        <div className="record-list">
-          {completedBookingsWithoutNotes.length > 0 ? completedBookingsWithoutNotes.map((booking) => (
-            <article key={booking.id} className="lesson-note-record">
-              <strong>{booking.id} / {booking.student}</strong>
-              <span>{formatLessonKind(booking.lessonKind, "ja")} / {formatDateTime(booking.requestedSlot)} ({booking.timezone})</span>
-              <span>送信先: {booking.studentEmail}</span>
-              {lessonNoteMessages[booking.id] ? (
-                <p className={lessonNoteMessages[booking.id].startsWith("送信完了") ? "form-success" : "form-error"}>
-                  {lessonNoteMessages[booking.id]}
-                </p>
-              ) : null}
-              <label>
-                レッスンノート
-                <textarea
-                  value={lessonNoteDrafts[booking.id] ?? booking.reason ?? ""}
-                  rows={5}
-                  onChange={(event) => updateLessonNoteDraft(booking.id, event.target.value)}
-                  placeholder="生徒へ共有するレッスン内容、宿題、次回に向けたメモを入力"
-                />
-              </label>
-              <button className="button primary" type="button" onClick={() => void sendLessonNote(booking)} disabled={!(lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim()}>
-                完了
-              </button>
-            </article>
-          )) : <p className="platform-muted">レッスンノート未送信の完了レッスンはありません。</p>}
-        </div>
-      </section>
-
+      {activeTutorTab === "availability" ? (
       <section className="platform-card platform-form">
         <h3>空き時間を登録</h3>
         <div className="segmented-control" aria-label="空き時間登録方法">
@@ -2660,7 +2686,9 @@ function TutorAvailabilityPage({
           </form>
         )}
       </section>
+      ) : null}
 
+      {activeTutorTab === "preview" ? (
       <section className="platform-card">
         <h3>Student表示プレビュー</h3>
         <p className="platform-muted">削除したい枠はプレビュー上の枠をクリックすると削除できます。</p>
@@ -2681,7 +2709,9 @@ function TutorAvailabilityPage({
           </p>
         ) : null}
       </section>
+      ) : null}
 
+      {activeTutorTab === "purchase" ? (
       <section className="platform-card platform-form" id="purchase-offer">
         <p className="eyebrow">Student Purchase Offer</p>
         <h3>生徒別購入案内</h3>
@@ -2875,7 +2905,9 @@ function TutorAvailabilityPage({
           )) : <p className="platform-muted">購入案内履歴はまだありません。</p>}
         </div>
       </section>
+      ) : null}
 
+      {activeTutorTab === "reviews" ? (
       <section className="platform-card">
         <h3>レビュー管理</h3>
         <p className="platform-muted">投稿されたレビューを確認し、掲載するものを選択できます。</p>
@@ -2890,6 +2922,7 @@ function TutorAvailabilityPage({
           )) : <p className="platform-muted">確認待ちのレビューはありません。</p>}
         </div>
       </section>
+      ) : null}
 
       {selectedTutorBooking ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="予約詳細">
@@ -2907,8 +2940,11 @@ function TutorAvailabilityPage({
               </a>
             ) : null}
             <button className="button secondary" type="button" onClick={() => {
-              document.getElementById("student-package-summary")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              setActiveTutorTab("students");
               setSelectedTutorBooking(null);
+              window.requestAnimationFrame(() => {
+                document.getElementById("student-package-summary")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              });
             }}>
               生徒別パッケージ一覧へ
             </button>

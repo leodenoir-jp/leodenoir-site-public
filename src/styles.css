@@ -2334,6 +2334,38 @@ textarea {
   color: var(--navy);
 }
 
+.tutor-admin-tabs {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 24px rgba(11, 22, 42, 0.08);
+  backdrop-filter: blur(14px);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding: 8px;
+  position: sticky;
+  top: 76px;
+  z-index: 15;
+}
+
+.tutor-admin-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 44px;
+  padding: 10px 8px;
+}
+
+.tutor-admin-tabs button.active {
+  background: #edf4f7;
+  border-color: var(--line);
+  color: var(--navy);
+}
+
 .counseling-admin-calendar {
   margin-top: 16px;
 }
@@ -2670,6 +2702,11 @@ textarea {
 }
 
 @media (max-width: 900px) {
+  .tutor-admin-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    position: static;
+  }
+
   .header-inner {
     align-items: flex-start;
     flex-direction: column;
@@ -2728,6 +2765,10 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .tutor-admin-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .header-inner,
   .container,
   .footer-inner,

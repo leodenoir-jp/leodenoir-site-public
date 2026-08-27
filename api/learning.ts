@@ -372,8 +372,8 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
     serviceClient.from("students").select("id,student_id,email,name").eq("email", email).maybeSingle(),
     serviceClient.from("students").select("id,student_id,email,name").eq("student_id", studentId).maybeSingle()
   ]);
-  if (emailResult.error) throw emailResult.error;
-  if (idResult.error) throw idResult.error;
+  if (emailResult.error) return res.status(502).json({ message: `Student email lookup failed: ${emailResult.error.message}`, code: emailResult.error.code });
+  if (idResult.error) return res.status(502).json({ message: `Student ID lookup failed: ${idResult.error.message}`, code: idResult.error.code });
   if (emailResult.data && idResult.data && emailResult.data.id !== idResult.data.id) {
     return res.status(409).json({ message: "Student IDとメールアドレスが別々の生徒に登録されています。" });
   }
@@ -386,7 +386,7 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
       .eq("id", existing.id)
       .select("id,student_id,email,name")
       .single();
-    if (error) throw error;
+    if (error) return res.status(502).json({ message: `Student update failed: ${error.message}`, code: error.code });
     return res.status(200).json({ message: "生徒情報を更新しました。", student: data });
   }
 
@@ -395,7 +395,7 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
     .insert({ student_id: studentId, email, name, provider: "email" })
     .select("id,student_id,email,name")
     .single();
-  if (error) throw error;
+  if (error) return res.status(502).json({ message: `Student insert failed: ${error.message}`, code: error.code });
   return res.status(200).json({ message: "生徒情報を登録しました。", student: data });
 }
 

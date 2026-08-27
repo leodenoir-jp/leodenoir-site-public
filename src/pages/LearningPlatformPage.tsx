@@ -53,6 +53,7 @@ type StudentProfile = {
   provider: "google" | "email";
   createdAt: string;
   zoomLink?: string;
+  lessonCredits?: CustomerRecord["lessonCredits"];
 };
 
 type SupabaseUserLike = {
@@ -107,7 +108,17 @@ type LearningAdminStudent = {
   student_id: string;
   email: string;
   name: string | null;
-  zoom_link: string | null;
+  zoom_link?: string | null;
+  lesson_packages?: Array<{
+    lesson_kind: LessonKind;
+    lesson_menu_id: string;
+    package_label: string;
+    currency: "USD" | "JPY";
+    unit_price: number;
+    purchased_lessons: number;
+    remaining_lessons: number;
+    purchased_at: string;
+  }>;
 };
 
 type LearningPurchaseOffer = {
@@ -1992,7 +2003,17 @@ function TutorAvailabilityPage({
     email: student.email.toLowerCase(),
     provider: "email",
     createdAt: "",
-    zoomLink: student.zoom_link || ""
+    zoomLink: student.zoom_link || "",
+    lessonCredits: (student.lesson_packages ?? []).map((item) => ({
+      lessonKind: item.lesson_kind,
+      lessonMenuId: item.lesson_menu_id,
+      packageLabel: item.package_label,
+      currency: item.currency,
+      unitPrice: Number(item.unit_price),
+      purchasedLessons: Number(item.purchased_lessons),
+      remainingLessons: Number(item.remaining_lessons),
+      purchasedAt: item.purchased_at
+    }))
   }));
   const mergedStudentProfiles = [
     ...studentProfiles.filter((profile) => !adminStudentProfiles.some((adminProfile) => adminProfile.email === profile.email.toLowerCase())),
@@ -3060,6 +3081,7 @@ function StudentDashboard({
   const isOwner = normalizedEmail === ownerEmail;
   const visibleBookings = bookings.filter((booking) => booking.studentEmail.toLowerCase() === normalizedEmail);
   const openAvailabilitySlots = availabilitySlots.filter((slot) => !isAvailabilitySlotBooked(slot, bookings));
+  const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
   const activeCustomer = normalizedEmail === customer.email.toLowerCase()
     ? customer
     : {
@@ -3067,11 +3089,10 @@ function StudentDashboard({
         name: visibleBookings[0]?.student ?? "Guest student",
         email: normalizedEmail,
         packageRemaining: visibleBookings.filter((booking) => booking.status === "approved").length,
-        lessonCredits: [],
+        lessonCredits: activeProfile?.lessonCredits ?? [],
         renewalDue: "未設定"
       };
 
-  const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === normalizedEmail);
   const packageSummary = buildStudentPackageSummary(activeCustomer.email, bookings, activeCustomer, activeProfile?.studentId, activeProfile?.zoomLink);
 
   const submitStudentContact = async (event: FormEvent<HTMLFormElement>) => {
@@ -3863,7 +3884,8 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     email: String(body.profile.email).toLowerCase(),
     provider: mapSupabaseProvider(body.profile.provider),
     createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString()),
-    zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || "")
+    zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || ""),
+    lessonCredits: Array.isArray(body.profile.lessonCredits) ? body.profile.lessonCredits : localProfile?.lessonCredits ?? []
   };
 }
 
@@ -3916,7 +3938,10 @@ function buildStudentPackageSummaries(bookings: BookingRecord[], customer: Custo
   ]));
   return emails.map((email) => {
     const profile = profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
-    return buildStudentPackageSummary(email, bookings, customer, profile?.studentId, profile?.zoomLink, profile?.name);
+    const studentCustomer = email === customer.email.toLowerCase()
+      ? customer
+      : { ...customer, email, lessonCredits: profile?.lessonCredits ?? [] };
+    return buildStudentPackageSummary(email, bookings, studentCustomer, profile?.studentId, profile?.zoomLink, profile?.name);
   });
 }
 

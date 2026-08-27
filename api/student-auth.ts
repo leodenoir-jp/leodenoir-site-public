@@ -176,7 +176,7 @@ async function upsertStudentProfile({
 }) {
   const { data: existing, error: findError } = await serviceClient
     .from("students")
-    .select("student_id,name,email,provider,zoom_link,created_at")
+    .select("student_id,name,email,provider,created_at")
     .eq("email", email)
     .maybeSingle();
 
@@ -194,7 +194,7 @@ async function upsertStudentProfile({
         updated_at: new Date().toISOString()
       })
       .eq("email", email)
-      .select("student_id,name,email,provider,zoom_link,created_at")
+      .select("student_id,name,email,provider,created_at")
       .single();
 
     if (updateError) {
@@ -213,7 +213,7 @@ async function upsertStudentProfile({
       name,
       provider
     })
-    .select("student_id,name,email,provider,zoom_link,created_at")
+    .select("student_id,name,email,provider,created_at")
     .single();
 
   if (insertError) {

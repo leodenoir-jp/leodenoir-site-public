@@ -21,12 +21,24 @@ type StudentProfilePayload = {
 };
 
 type StudentRecord = {
+  id: string;
   student_id: string;
   name: string | null;
   email: string;
   provider: string | null;
   zoom_link?: string | null;
   created_at: string;
+};
+
+type LessonPackageRecord = {
+  lesson_kind: "japanese" | "english";
+  lesson_menu_id: string;
+  package_label: string;
+  currency: "USD" | "JPY";
+  unit_price: number;
+  purchased_lessons: number;
+  remaining_lessons: number;
+  purchased_at: string;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,6 +74,28 @@ function toProfile(record: StudentRecord) {
     provider: record.provider === "google" ? "google" : "email",
     createdAt: record.created_at,
     zoomLink: record.zoom_link || ""
+  };
+}
+
+async function toProfileWithPackages(serviceClient: any, record: StudentRecord) {
+  const { data, error } = await serviceClient
+    .from("lesson_packages")
+    .select("lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at")
+    .eq("student_id", record.id)
+    .order("purchased_at", { ascending: false });
+  if (error) throw error;
+  return {
+    ...toProfile(record),
+    lessonCredits: ((data ?? []) as LessonPackageRecord[]).map((item) => ({
+      lessonKind: item.lesson_kind,
+      lessonMenuId: item.lesson_menu_id,
+      packageLabel: item.package_label,
+      currency: item.currency,
+      unitPrice: Number(item.unit_price),
+      purchasedLessons: Number(item.purchased_lessons),
+      remainingLessons: Number(item.remaining_lessons),
+      purchasedAt: item.purchased_at
+    }))
   };
 }
 
@@ -137,7 +171,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
 
     const { data: existing, error: findError } = await serviceClient
       .from("students")
-      .select("student_id,name,email,provider,zoom_link,created_at")
+      .select("id,student_id,name,email,provider,created_at")
       .eq("email", email)
       .maybeSingle();
 
@@ -156,7 +190,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
           updated_at: new Date().toISOString()
         })
         .eq("email", email)
-        .select("student_id,name,email,provider,zoom_link,created_at")
+        .select("id,student_id,name,email,provider,created_at")
         .single();
 
       if (updateError) {
@@ -164,7 +198,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
         return res.status(500).json({ message: "Student profile update failed." });
       }
 
-      return res.status(200).json({ profile: toProfile(updated as StudentRecord) });
+      return res.status(200).json({ profile: await toProfileWithPackages(serviceClient, updated as StudentRecord) });
     }
 
     const studentId = await generateUniqueStudentId(serviceClient);
@@ -177,19 +211,19 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
         name,
         provider
       })
-      .select("student_id,name,email,provider,zoom_link,created_at")
+      .select("id,student_id,name,email,provider,created_at")
       .single();
 
     if (insertError) {
       if (insertError.code === "23505") {
         const { data: racedExisting } = await serviceClient
           .from("students")
-          .select("student_id,name,email,provider,zoom_link,created_at")
+          .select("id,student_id,name,email,provider,created_at")
           .eq("email", email)
           .maybeSingle();
 
         if (racedExisting?.student_id) {
-          return res.status(200).json({ profile: toProfile(racedExisting as StudentRecord) });
+          return res.status(200).json({ profile: await toProfileWithPackages(serviceClient, racedExisting as StudentRecord) });
         }
       }
 
@@ -200,7 +234,7 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
       return res.status(500).json({ message: "Student profile insert failed." });
     }
 
-    return res.status(200).json({ profile: toProfile(inserted as StudentRecord) });
+    return res.status(200).json({ profile: await toProfileWithPackages(serviceClient, inserted as StudentRecord) });
   } catch (error) {
     console.error("Student profile request failed.", {
       message: error instanceof Error ? error.message : "Unknown error"

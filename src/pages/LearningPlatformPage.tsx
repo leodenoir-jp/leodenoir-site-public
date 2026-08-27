@@ -1351,7 +1351,7 @@ function PurchaseDialog({
   blockedStudents: string[];
   onClose: () => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "PayPay">("PayPal");
+  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "PayPay" | "BankTransfer">("PayPal");
   const [receiptRequested, setReceiptRequested] = useState(false);
   const [receiptName, setReceiptName] = useState(bookingForm.name);
   const [receiptEmail, setReceiptEmail] = useState(bookingForm.email);
@@ -1379,6 +1379,11 @@ function PurchaseDialog({
   const paypalFeeLabel = formatPaymentMoney(paypalFeeAmount, selectedMenu.currency);
   const totalAmountLabel = formatPaymentMoney(totalPurchaseAmount, selectedMenu.currency);
   const totalPriceSummary = `${totalAmountLabel} / ${bookingForm.durationMinutes}分 x ${bookingForm.lessonCount}回`;
+  const paymentMethodLabel = {
+    ja: { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "口座振込" },
+    en: { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "Bank transfer" },
+    "zh-Hant": { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "銀行轉帳" }
+  }[language][paymentMethod];
 
   const savePurchaseDraft = async () => {
     if (isBlocked) {
@@ -1400,7 +1405,7 @@ function PurchaseDialog({
       "",
       "Leo de Noir / Workaholic Owl Learning Menuより、レッスンパッケージの購入希望を受け付けました。",
       "",
-      "内容を確認のうえ、講師よりPayPalまたはPayPayの決済方法をご案内します。",
+      "内容を確認のうえ、講師より選択された支払い方法をご案内します。",
       "決済案内のメールをお待ちください。",
       "",
       "購入希望内容",
@@ -1411,7 +1416,8 @@ function PurchaseDialog({
       `レッスン料金: ${priceSummary}`,
       paymentMethod === "PayPal" ? `PayPal決済手数料（4.1%）: ${paypalFeeLabel}` : "",
       `請求合計: ${totalPriceSummary}`,
-      `支払い方法: ${paymentMethod}`,
+      paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
+      `支払い方法: ${paymentMethodLabel}`,
       `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
       receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
       "",
@@ -1440,7 +1446,8 @@ function PurchaseDialog({
         `レッスン料金: ${priceSummary}`,
         paymentMethod === "PayPal" ? `PayPal決済手数料（4.1%）: ${paypalFeeLabel}` : "",
         `請求合計: ${totalPriceSummary}`,
-        `支払い方法: ${paymentMethod}`,
+        paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
+        `支払い方法: ${paymentMethodLabel}`,
         `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
         receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
         receiptRequested ? `領収書送付先メール: ${receiptEmail || "未入力"}` : "",
@@ -1493,7 +1500,12 @@ function PurchaseDialog({
               <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => setPaymentMethod("PayPay")} disabled={purchaseSent} />
               PayPay
             </label>
+            <label>
+              <input type="radio" name="payment-method" checked={paymentMethod === "BankTransfer"} onChange={() => setPaymentMethod("BankTransfer")} disabled={purchaseSent} />
+              {receiptCopy.bankTransfer}
+            </label>
           </fieldset>
+          {paymentMethod === "BankTransfer" ? <p className="platform-note">{receiptCopy.bankTransferFeeNotice}</p> : null}
           <label>
             表示名
             <input value={receiptName} onChange={(event) => setReceiptName(event.target.value)} disabled={purchaseSent} />
@@ -1542,6 +1554,12 @@ function PurchaseDialog({
                 <dd>{paypalFeeLabel}（4.1%）</dd>
               </div>
               ) : null}
+              {paymentMethod === "BankTransfer" ? (
+              <div>
+                <dt>{receiptCopy.bankTransferFee}</dt>
+                <dd>{receiptCopy.bankTransferFeeReceipt}</dd>
+              </div>
+              ) : null}
               <div>
                 <dt>{receiptCopy.service}</dt>
                 <dd>
@@ -1551,7 +1569,7 @@ function PurchaseDialog({
               </div>
               <div>
                 <dt>{receiptCopy.paymentMethod}</dt>
-                <dd>{paymentMethod}</dd>
+                <dd>{paymentMethodLabel}</dd>
               </div>
               <div>
                 <dt>{receiptCopy.issuer}</dt>
@@ -4300,7 +4318,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "カテゴリごとにコース内容を整理しています。各コースはタイルで確認できます。購入回数・時間は下の「コース購入」で選択できます。",
       purchaseTitle: "コース購入",
-      purchaseLead: "こちらからレッスンパッケージの購入が可能です。オンラインレッスンは、ご希望のレッスン形態を選択し「購入画面へ」を押してください。PayPalを選択した場合は、レッスン料金に4.1%の決済手数料が加算されます。",
+      purchaseLead: "こちらからレッスンパッケージの購入が可能です。オンラインレッスンは、ご希望のレッスン形態を選択し「購入画面へ」を押してください。PayPalを選択した場合はレッスン料金に4.1%の決済手数料が加算され、口座振込を選択した場合の振込手数料は利用者負担となります。",
       lessonMenu: "レッスンメニュー",
       selected: "選択中",
       duration: "授業時間",
@@ -4328,7 +4346,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "Lesson options are organized by learning purpose. Course details are shown as tiles, and lesson count and duration can be selected in Course Purchase below.",
       purchaseTitle: "Course Purchase",
-      purchaseLead: "You can request a lesson package purchase here. For online lessons, select your preferred lesson format and press “Purchase screen”. A 4.1% processing fee is added when PayPal is selected.",
+      purchaseLead: "You can request a lesson package purchase here. For online lessons, select your preferred lesson format and press “Purchase screen”. A 4.1% processing fee is added when PayPal is selected. Bank transfer fees are borne by the customer.",
       lessonMenu: "Lesson menu",
       selected: "Selected",
       duration: "Duration",
@@ -4356,7 +4374,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "課程選單",
       menuLead: "課程依學習目的整理。各課程以?片呈現，購買堂數與時間可在下方「課程購買」中選擇。",
       purchaseTitle: "課程購買",
-      purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。選擇 PayPal 時，將加收 4.1% 付款手續費。",
+      purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。選擇 PayPal 時將加收 4.1% 付款手續費；選擇銀行轉帳時，轉帳手續費由學生負擔。",
       lessonMenu: "課程選單",
       selected: "目前選擇",
       duration: "課程時間",
@@ -4598,6 +4616,10 @@ function getReceiptCopy(language: PlatformLanguage) {
       amount: "金額",
       baseAmount: "レッスン料金",
       paypalFee: "PayPal決済手数料",
+      bankTransfer: "口座振込",
+      bankTransferFee: "振込手数料",
+      bankTransferFeeNotice: "口座振込を選択した場合、金融機関に支払う振込手数料は利用者のご負担となります。",
+      bankTransferFeeReceipt: "利用者負担（領収金額には含まれません）",
       totalAmount: "請求合計",
       service: "但し書き・役務内容",
       paymentMethod: "支払い方法",
@@ -4607,7 +4629,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       inPerson: "対面",
       notSet: "未入力",
       paypalFeeIncluded: "PayPal決済手数料4.1%込み",
-      paymentNotice: "この画面では購入希望内容を送信します。決済はこの場では完了しません。PayPalを選択した場合、レッスン料金に4.1%の決済手数料を加算した合計額でご案内します。",
+      paymentNotice: "この画面では購入希望内容を送信します。決済はこの場では完了しません。PayPalを選択した場合はレッスン料金に4.1%の決済手数料を加算し、口座振込を選択した場合の振込手数料は利用者にご負担いただきます。",
       note: "入金確認後に正式領収書として発行します。法人提出を想定し、宛名、発行日、金額、役務内容、支払方法、発行者情報、領収書番号を記載します。"
     },
     en: {
@@ -4619,6 +4641,10 @@ function getReceiptCopy(language: PlatformLanguage) {
       amount: "Amount",
       baseAmount: "Lesson fee",
       paypalFee: "PayPal processing fee",
+      bankTransfer: "Bank transfer",
+      bankTransferFee: "Bank transfer fee",
+      bankTransferFeeNotice: "Any bank transfer fee charged by the financial institution is borne by the customer.",
+      bankTransferFeeReceipt: "Paid by the customer (not included in the receipt amount)",
       totalAmount: "Total",
       service: "Description",
       paymentMethod: "Payment Method",
@@ -4628,7 +4654,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       inPerson: "In person",
       notSet: "Not entered",
       paypalFeeIncluded: "Includes the 4.1% PayPal processing fee",
-      paymentNotice: "This screen sends a purchase request; payment is not completed here. When PayPal is selected, the payment instructions will show the lesson fee plus a 4.1% processing fee.",
+      paymentNotice: "This screen sends a purchase request; payment is not completed here. PayPal payments include a 4.1% processing fee. Any bank transfer fee is borne by the customer.",
       note: "The official receipt will be issued after payment confirmation. It includes the recipient, issue date, amount, service description, payment method, issuer information, and receipt number."
     },
     "zh-Hant": {
@@ -4640,6 +4666,10 @@ function getReceiptCopy(language: PlatformLanguage) {
       amount: "金額",
       baseAmount: "課程費用",
       paypalFee: "PayPal 付款手續費",
+      bankTransfer: "銀行轉帳",
+      bankTransferFee: "轉帳手續費",
+      bankTransferFeeNotice: "選擇銀行轉帳時，金融機構收取的轉帳手續費由學生負擔。",
+      bankTransferFeeReceipt: "由學生負擔（不包含在收據金額內）",
       totalAmount: "應付總額",
       service: "服務?容",
       paymentMethod: "付款方式",
@@ -4649,7 +4679,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       inPerson: "實體",
       notSet: "未輸入",
       paypalFeeIncluded: "含 4.1% PayPal 付款手續費",
-      paymentNotice: "此畫面僅送出購買申請，尚未完成付款。選擇 PayPal 時，付款金額將包含課程費用及 4.1% 付款手續費。",
+      paymentNotice: "此畫面僅送出購買申請，尚未完成付款。選擇 PayPal 時將加收 4.1% 付款手續費；選擇銀行轉帳時，轉帳手續費由學生負擔。",
       note: "確認入款後，將開立正式收據。收據會包含抬頭、開立日期、金額、服務?容、付款方式、開立者資訊與收據編號。"
     }
   } satisfies Record<PlatformLanguage, Record<string, string>>;

@@ -399,6 +399,41 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
   return res.status(200).json({ message: "生徒情報を登録しました。", student: data });
 }
 
+async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const email = cleanText(body.email).toLowerCase();
+  if (!emailPattern.test(email)) return res.status(400).json({ message: "メールアドレスを確認してください。" });
+
+  const serviceClient = await createServiceClient();
+  const { data: publicProfile, error: profileError } = await serviceClient
+    .from("students")
+    .select("id,auth_user_id,student_id,email,name,provider,zoom_link,created_at")
+    .eq("email", email)
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) throw error;
+    const authUser = data.users.find((user) => user.email?.toLowerCase() === email);
+    if (authUser) {
+      const metadata = authUser.user_metadata && typeof authUser.user_metadata === "object"
+        ? authUser.user_metadata as Record<string, unknown>
+        : {};
+      return res.status(200).json({
+        found: true,
+        email: authUser.email,
+        name: cleanText(metadata.full_name) || cleanText(metadata.name),
+        provider: authUser.app_metadata?.provider ?? "",
+        publicProfile: publicProfile ?? null
+      });
+    }
+    if (data.users.length < 100) break;
+  }
+
+  return res.status(200).json({ found: false, publicProfile: publicProfile ?? null });
+}
+
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const values = Array.isArray(body.slots) ? body.slots : [];
@@ -701,6 +736,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "admin-login") return await loginTutor(body, res);
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
+    if (action === "find-auth-student-by-email") return await findAuthStudentByEmail(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);

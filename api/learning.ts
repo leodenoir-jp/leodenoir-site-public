@@ -369,8 +369,8 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
 
   const serviceClient = await createServiceClient();
   const [emailResult, idResult] = await Promise.all([
-    serviceClient.from("students").select("id,student_id,email,name,zoom_link").eq("email", email).maybeSingle(),
-    serviceClient.from("students").select("id,student_id,email,name,zoom_link").eq("student_id", studentId).maybeSingle()
+    serviceClient.from("students").select("id,student_id,email,name").eq("email", email).maybeSingle(),
+    serviceClient.from("students").select("id,student_id,email,name").eq("student_id", studentId).maybeSingle()
   ]);
   if (emailResult.error) throw emailResult.error;
   if (idResult.error) throw idResult.error;
@@ -384,7 +384,7 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
       .from("students")
       .update({ student_id: studentId, email, name, updated_at: new Date().toISOString() })
       .eq("id", existing.id)
-      .select("id,student_id,email,name,zoom_link")
+      .select("id,student_id,email,name")
       .single();
     if (error) throw error;
     return res.status(200).json({ message: "生徒情報を更新しました。", student: data });
@@ -393,7 +393,7 @@ async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res
   const { data, error } = await serviceClient
     .from("students")
     .insert({ student_id: studentId, email, name, provider: "email" })
-    .select("id,student_id,email,name,zoom_link")
+    .select("id,student_id,email,name")
     .single();
   if (error) throw error;
   return res.status(200).json({ message: "生徒情報を登録しました。", student: data });
@@ -502,6 +502,81 @@ async function findAuthStudentById(body: Record<string, unknown>, req: ApiReques
   }
 
   return res.status(200).json({ found: false, publicProfile: null });
+}
+
+async function grantPaidPackage(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  const email = cleanText(body.email).toLowerCase();
+  const lessonKind = cleanText(body.lessonKind) === "english" ? "english" : "japanese";
+  const lessonMenuId = cleanText(body.lessonMenuId);
+  const packageLabel = cleanText(body.packageLabel);
+  const currency = cleanText(body.currency) === "JPY" ? "JPY" : "USD";
+  const unitPrice = Number(body.unitPrice);
+  const quantity = Math.floor(Number(body.quantity));
+
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId) || !emailPattern.test(email)) {
+    return res.status(400).json({ message: "Student IDとメールアドレスを確認してください。" });
+  }
+  if (!lessonMenuId || !packageLabel || quantity < 1 || quantity > 100 || !Number.isFinite(unitPrice) || unitPrice < 0) {
+    return res.status(400).json({ message: "付与するパッケージ内容を確認してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const { data: student, error: studentError } = await serviceClient
+    .from("students")
+    .select("id,student_id,email,name")
+    .eq("student_id", studentId)
+    .eq("email", email)
+    .maybeSingle();
+  if (studentError) throw studentError;
+  if (!student) return res.status(404).json({ message: "Student IDとメールアドレスが一致する生徒が見つかりません。" });
+
+  const { data: existingPackage, error: findError } = await serviceClient
+    .from("lesson_packages")
+    .select("id,purchased_lessons,remaining_lessons")
+    .eq("student_id", student.id)
+    .eq("lesson_kind", lessonKind)
+    .eq("lesson_menu_id", lessonMenuId)
+    .eq("unit_price", unitPrice)
+    .order("purchased_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (findError) throw findError;
+
+  if (existingPackage) {
+    const { data, error } = await serviceClient
+      .from("lesson_packages")
+      .update({
+        package_label: packageLabel,
+        purchased_lessons: Number(existingPackage.purchased_lessons) + quantity,
+        remaining_lessons: Number(existingPackage.remaining_lessons) + quantity,
+        purchased_at: new Date().toISOString()
+      })
+      .eq("id", existingPackage.id)
+      .select("id,lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at")
+      .single();
+    if (error) throw error;
+    return res.status(200).json({ message: `${quantity}回分を既存パッケージへ追加しました。`, student, lessonPackage: data });
+  }
+
+  const { data, error } = await serviceClient
+    .from("lesson_packages")
+    .insert({
+      student_id: student.id,
+      lesson_kind: lessonKind,
+      lesson_menu_id: lessonMenuId,
+      package_label: packageLabel,
+      currency,
+      unit_price: unitPrice,
+      purchased_lessons: quantity,
+      remaining_lessons: quantity,
+      purchased_at: new Date().toISOString()
+    })
+    .select("id,lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at")
+    .single();
+  if (error) throw error;
+  return res.status(200).json({ message: `${quantity}回分のパッケージを付与しました。`, student, lessonPackage: data });
 }
 
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
@@ -810,6 +885,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "find-student-by-id") return await findStudentById(body, req, res);
     if (action === "find-auth-student-by-id") return await findAuthStudentById(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
+    if (action === "grant-paid-package") return await grantPaidPackage(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);
     return res.status(400).json({ message: "Unknown action." });

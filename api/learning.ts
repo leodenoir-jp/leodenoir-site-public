@@ -1,3 +1,8 @@
+import {
+  createPaymentPricingBreakdown,
+  normalizeVariableProcessingRate
+} from "../shared/paymentPricing";
+
 declare const process: {
   env: Record<string, string | undefined>;
 };
@@ -37,6 +42,11 @@ type PurchaseOfferRecord = {
   quantity: number;
   currency: "USD" | "JPY";
   unit_price: number;
+  base_price?: number;
+  payment_adjusted_price?: number;
+  variable_processing_rate?: number;
+  pricing_reference_rate?: number;
+  final_customer_price?: number;
   total_amount: number;
   payment_method: "PayPal" | "PayPay";
   payment_link: string;
@@ -180,17 +190,22 @@ function formatMoney(amount: number, currency: "USD" | "JPY") {
   }).format(amount);
 }
 
-function calculatePurchaseTotal(unitPrice: number, quantity: number, currency: "USD" | "JPY", paypalFeeIncluded: boolean) {
-  const baseTotal = unitPrice * quantity;
-  if (!paypalFeeIncluded) return baseTotal;
-  const total = baseTotal * 1.041;
-  return currency === "JPY" ? Math.round(total) : Math.round(total * 100) / 100;
+function paymentVariableRate(method: "PayPal" | "PayPay") {
+  return method === "PayPal"
+    ? normalizeVariableProcessingRate(process.env.VITE_PAYPAL_VARIABLE_PROCESSING_RATE)
+    : normalizeVariableProcessingRate(process.env.VITE_PAYPAY_VARIABLE_PROCESSING_RATE, 0);
 }
 
-function includesPaypalFee(offer: PurchaseOfferRecord) {
-  if (offer.payment_method !== "PayPal") return false;
-  const baseTotal = Number(offer.unit_price) * Number(offer.quantity);
-  return Number(offer.total_amount) > baseTotal + (offer.currency === "JPY" ? 0.5 : 0.005);
+function purchasePricing(unitPrice: number, quantity: number, currency: "USD" | "JPY", paymentMethod: "PayPal" | "PayPay") {
+  const baseTotal = unitPrice * quantity;
+  const pricingReferenceRate = normalizeVariableProcessingRate(process.env.VITE_PAYPAL_VARIABLE_PROCESSING_RATE);
+  return createPaymentPricingBreakdown({
+    basePrice: baseTotal,
+    paymentMethod,
+    variableProcessingRate: paymentVariableRate(paymentMethod),
+    pricingReferenceRate,
+    currency
+  });
 }
 
 function renderEmailHtml(content: string) {
@@ -461,26 +476,24 @@ async function findOrCreateStudent(serviceClient: Awaited<ReturnType<typeof crea
 
 function purchaseOfferCopy(offer: PurchaseOfferRecord) {
   const total = formatMoney(Number(offer.total_amount), offer.currency);
-  const unit = formatMoney(Number(offer.unit_price), offer.currency);
   const link = offer.payment_link;
-  const paypalFeeIncluded = includesPaypalFee(offer);
   if (offer.display_language === "en") {
     return {
       subject: "Lesson package purchase information",
-      text: `${offer.students.name || offer.students.email},\n\nYour lesson package purchase information is ready.\n\nPackage: ${offer.package_label}\nDuration: ${offer.duration_minutes} minutes\nLessons: ${offer.quantity}\nUnit price: ${unit}\nTotal: ${total}${paypalFeeIncluded ? " (includes the 4.1% PayPal processing fee)" : ""}\nPayment: ${offer.payment_method}\nPayment link: ${link}\n\nAfter completing payment, please reply to this email. Your package will be added after payment is confirmed.`,
+      text: `${offer.students.name || offer.students.email},\n\nYour lesson package purchase information is ready.\n\nPackage: ${offer.package_label}\nDuration: ${offer.duration_minutes} minutes\nLessons: ${offer.quantity}\nSelling price: ${total}\nPayment: ${offer.payment_method}\nPayment link: ${link}\n\nAfter completing payment, please reply to this email. Your package will be added after payment is confirmed.`,
       receiptLabel: "Receipt"
     };
   }
   if (offer.display_language === "zh-Hant") {
     return {
       subject: "課程套組購買資訊",
-      text: `${offer.students.name || offer.students.email} 您好：\n\n以下是您的課程套組購買資訊。\n\n套組：${offer.package_label}\n時長：${offer.duration_minutes}分鐘\n堂數：${offer.quantity}\n單價：${unit}\n總額：${total}${paypalFeeIncluded ? "（含4.1% PayPal付款手續費）" : ""}\n付款方式：${offer.payment_method}\n付款連結：${link}\n\n完成付款後請回覆此郵件。確認入帳後，課程堂數將加入您的帳戶。`,
+      text: `${offer.students.name || offer.students.email} 您好：\n\n以下是您的課程套組購買資訊。\n\n套組：${offer.package_label}\n時長：${offer.duration_minutes}分鐘\n堂數：${offer.quantity}\n售價：${total}\n付款方式：${offer.payment_method}\n付款連結：${link}\n\n完成付款後請回覆此郵件。確認入帳後，課程堂數將加入您的帳戶。`,
       receiptLabel: "收據"
     };
   }
   return {
     subject: "レッスンパッケージ購入のご案内",
-    text: `${offer.students.name || offer.students.email} 様\n\nレッスンパッケージの購入内容と決済方法をご案内します。\n\nパッケージ：${offer.package_label}\n時間：${offer.duration_minutes}分\n回数：${offer.quantity}回\n1回あたり：${unit}\n合計：${total}${paypalFeeIncluded ? "（PayPal決済手数料4.1%を含みます）" : ""}\n決済方法：${offer.payment_method}\n決済リンク：${link}\n\nお支払い完了後、このメールへご返信ください。入金確認後、レッスン回数をアカウントへ反映します。`,
+    text: `${offer.students.name || offer.students.email} 様\n\nレッスンパッケージの購入内容と決済方法をご案内します。\n\nパッケージ：${offer.package_label}\n時間：${offer.duration_minutes}分\n回数：${offer.quantity}回\n販売価格：${total}\n決済方法：${offer.payment_method}\n決済リンク：${link}\n\nお支払い完了後、このメールへご返信ください。入金確認後、レッスン回数をアカウントへ反映します。`,
     receiptLabel: "領収書"
   };
 }
@@ -497,7 +510,6 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   const currency = cleanText(body.currency) === "JPY" ? "JPY" : "USD";
   const unitPrice = Number(body.unitPrice);
   const paymentMethod = cleanText(body.paymentMethod) === "PayPay" ? "PayPay" : "PayPal";
-  const paypalFeeIncluded = paymentMethod === "PayPal" && body.paypalFeeIncluded === true;
   const paymentLink = cleanText(body.paymentLink);
   const receiptRequested = body.receiptRequested === true;
   const receiptName = cleanText(body.receiptName);
@@ -508,7 +520,8 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   const serviceClient = await createServiceClient();
   const student = await findOrCreateStudent(serviceClient, email, name);
   const offerId = `LPO-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
-  const { data, error } = await serviceClient.from("lesson_purchase_offers").insert({
+  const pricing = purchasePricing(unitPrice, quantity, currency, paymentMethod);
+  const offerInsert = {
     offer_id: offerId,
     student_id: student.id,
     lesson_kind: lessonKind,
@@ -518,16 +531,43 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
     quantity,
     currency,
     unit_price: unitPrice,
-    total_amount: calculatePurchaseTotal(unitPrice, quantity, currency, paypalFeeIncluded),
+    base_price: pricing.basePrice,
+    payment_adjusted_price: pricing.paymentAdjustedPrice,
+    variable_processing_rate: pricing.variableProcessingRate,
+    pricing_reference_rate: pricing.pricingReferenceRate,
+    final_customer_price: pricing.finalCustomerPrice,
+    total_amount: pricing.finalCustomerPrice,
     payment_method: paymentMethod,
     payment_link: paymentLink,
     receipt_requested: receiptRequested,
     receipt_name: receiptRequested ? (receiptName || name || email) : null,
     display_language: displayLanguage,
     status: "pending_payment"
-  }).select("*,students(id,student_id,email,name)").single();
-  if (error) throw error;
-  const offer = data as PurchaseOfferRecord;
+  };
+  let insertResult = await serviceClient.from("lesson_purchase_offers")
+    .insert(offerInsert)
+    .select("*,students(id,student_id,email,name)")
+    .single();
+  if (insertResult.error && /base_price|payment_adjusted_price|variable_processing_rate|pricing_reference_rate|final_customer_price/i.test(insertResult.error.message)) {
+    console.warn("Payment pricing detail columns are not installed; falling back to the legacy purchase-offer schema.", {
+      code: insertResult.error.code,
+      offerId
+    });
+    const {
+      base_price: _basePrice,
+      payment_adjusted_price: _paymentAdjustedPrice,
+      variable_processing_rate: _variableProcessingRate,
+      pricing_reference_rate: _pricingReferenceRate,
+      final_customer_price: _finalCustomerPrice,
+      ...legacyOfferInsert
+    } = offerInsert;
+    insertResult = await serviceClient.from("lesson_purchase_offers")
+      .insert(legacyOfferInsert)
+      .select("*,students(id,student_id,email,name)")
+      .single();
+  }
+  if (insertResult.error) throw insertResult.error;
+  const offer = insertResult.data as PurchaseOfferRecord;
   const copy = purchaseOfferCopy(offer);
   const tutorEmail = (process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail).trim().toLowerCase();
   try {
@@ -560,7 +600,7 @@ function buildReceiptHtml(offer: PurchaseOfferRecord) {
     : offer.display_language === "zh-Hant"
       ? { title: "收據", recipient: "付款人", amount: "金額", service: "服務內容", method: "付款方式", date: "開立日期", issuer: "開立人", note: "上述款項已收訖。" }
       : { title: "領収書", recipient: "宛名", amount: "金額", service: "但し書き", method: "支払方法", date: "発行日", issuer: "発行者", note: "上記金額を正に領収いたしました。" };
-  const serviceDescription = `${offer.package_label} ${offer.duration_minutes}分 × ${offer.quantity}回${includesPaypalFee(offer) ? "（決済手数料込み）" : ""}`;
+  const serviceDescription = `${offer.package_label} ${offer.duration_minutes}分 × ${offer.quantity}回`;
   return `<!doctype html><html lang="${offer.display_language}"><head><meta charset="utf-8"><title>${copy.title} ${offer.offer_id}</title><style>body{font-family:'Yu Gothic','游ゴシック',YuGothic,Meiryo,sans-serif;color:#111827;margin:48px}.receipt{max-width:760px;margin:auto;border:1px solid #94a3b8;padding:40px}.brand{color:#0f2742;font-size:14px}.title{text-align:center;font-size:30px;margin:18px 0 34px}.amount{font-size:24px;font-weight:700;border-bottom:2px solid #0f2742;padding:8px 0}dl{display:grid;grid-template-columns:150px 1fr;gap:12px;margin:30px 0}dt{color:#475569}dd{margin:0}.footer{margin-top:42px;border-top:1px solid #cbd5e1;padding-top:18px}.id{font-size:12px;color:#64748b}</style></head><body><main class="receipt"><p class="brand">Leo de Noir / Workaholic Owl</p><h1 class="title">${copy.title}</h1><p class="id">No. ${escapeHtml(offer.offer_id)}</p><dl><dt>${copy.recipient}</dt><dd>${escapeHtml(receiptName)}</dd><dt>${copy.amount}</dt><dd class="amount">${escapeHtml(total)}</dd><dt>${copy.service}</dt><dd>${escapeHtml(serviceDescription)}</dd><dt>${copy.method}</dt><dd>${escapeHtml(offer.payment_method)}</dd><dt>${copy.date}</dt><dd>${escapeHtml(new Date().toLocaleDateString(offer.display_language === "ja" ? "ja-JP" : offer.display_language === "zh-Hant" ? "zh-TW" : "en-US", { timeZone: "Asia/Tokyo" }))}</dd><dt>${copy.issuer}</dt><dd>Leo de Noir / Workaholic Owl<br>運営者：請井 悠貴子<br>${ownerEmail}</dd></dl><p>${copy.note}</p><div class="footer">https://leodenoir.com</div></main></body></html>`;
 }
 

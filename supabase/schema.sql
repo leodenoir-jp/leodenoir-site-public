@@ -66,6 +66,11 @@ create table if not exists public.lesson_purchase_offers (
     (currency = 'USD' and unit_price between 0 and 100)
     or (currency = 'JPY' and unit_price between 0 and 30000)
   ),
+  base_price numeric not null default 0 check (base_price >= 0),
+  payment_adjusted_price numeric not null default 0 check (payment_adjusted_price >= 0),
+  variable_processing_rate numeric not null default 0 check (variable_processing_rate >= 0 and variable_processing_rate < 1),
+  pricing_reference_rate numeric not null default 0 check (pricing_reference_rate >= 0 and pricing_reference_rate < 1),
+  final_customer_price numeric not null default 0 check (final_customer_price >= 0),
   total_amount numeric not null check (total_amount >= 0),
   payment_method text not null check (payment_method in ('PayPal', 'PayPay')),
   payment_link text not null,
@@ -79,6 +84,13 @@ create table if not exists public.lesson_purchase_offers (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Additive migration for projects created before payment pricing details were introduced.
+alter table public.lesson_purchase_offers add column if not exists base_price numeric not null default 0 check (base_price >= 0);
+alter table public.lesson_purchase_offers add column if not exists payment_adjusted_price numeric not null default 0 check (payment_adjusted_price >= 0);
+alter table public.lesson_purchase_offers add column if not exists variable_processing_rate numeric not null default 0 check (variable_processing_rate >= 0 and variable_processing_rate < 1);
+alter table public.lesson_purchase_offers add column if not exists pricing_reference_rate numeric not null default 0 check (pricing_reference_rate >= 0 and pricing_reference_rate < 1);
+alter table public.lesson_purchase_offers add column if not exists final_customer_price numeric not null default 0 check (final_customer_price >= 0);
 
 create index if not exists availability_slots_starts_at_idx on public.availability_slots(starts_at);
 create index if not exists lesson_purchase_offers_student_id_idx on public.lesson_purchase_offers(student_id);

@@ -2,6 +2,7 @@
 import type { Route } from "../App";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
+import { getPaymentPricingBreakdown } from "../config/paymentPricing";
 import { importedLessonReviews } from "../data/lessonReviews";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
 import {
@@ -119,6 +120,11 @@ type LearningPurchaseOffer = {
   quantity: number;
   currency: "USD" | "JPY";
   unit_price: number;
+  base_price?: number;
+  payment_adjusted_price?: number;
+  variable_processing_rate?: number;
+  pricing_reference_rate?: number;
+  final_customer_price?: number;
   total_amount: number;
   payment_method: "PayPal" | "PayPay";
   payment_link: string;
@@ -1372,11 +1378,8 @@ function PurchaseDialog({
     bookingForm.lessonCount,
     bookingForm.deliveryMode === "inPerson" ? 1.8 : 1
   );
-  const totalPurchaseAmount = paymentMethod === "PayPal"
-    ? roundPaymentAmount(basePurchaseAmount * 1.041, selectedMenu.currency)
-    : roundPaymentAmount(basePurchaseAmount, selectedMenu.currency);
-  const paypalFeeAmount = roundPaymentAmount(totalPurchaseAmount - basePurchaseAmount, selectedMenu.currency);
-  const paypalFeeLabel = formatPaymentMoney(paypalFeeAmount, selectedMenu.currency);
+  const pricingBreakdown = getPaymentPricingBreakdown(basePurchaseAmount, paymentMethod, selectedMenu.currency);
+  const totalPurchaseAmount = pricingBreakdown.finalCustomerPrice;
   const totalAmountLabel = formatPaymentMoney(totalPurchaseAmount, selectedMenu.currency);
   const totalPriceSummary = `${totalAmountLabel} / ${bookingForm.durationMinutes}分 x ${bookingForm.lessonCount}回`;
   const paymentMethodLabel = {
@@ -1413,9 +1416,7 @@ function PurchaseDialog({
       `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
       `時間: ${bookingForm.durationMinutes}${text.minutes}`,
       `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
-      `レッスン料金: ${priceSummary}`,
-      paymentMethod === "PayPal" ? `PayPal決済手数料（4.1%）: ${paypalFeeLabel}` : "",
-      `請求合計: ${totalPriceSummary}`,
+      `販売価格: ${totalPriceSummary}`,
       paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
       `支払い方法: ${paymentMethodLabel}`,
       `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
@@ -1443,11 +1444,13 @@ function PurchaseDialog({
         `実施方法: ${bookingForm.deliveryMode === "online" ? text.online : text.inPerson}`,
         `時間: ${bookingForm.durationMinutes}${text.minutes}`,
         `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
-        `レッスン料金: ${priceSummary}`,
-        paymentMethod === "PayPal" ? `PayPal決済手数料（4.1%）: ${paypalFeeLabel}` : "",
-        `請求合計: ${totalPriceSummary}`,
+        `Base Price / 基準価格: ${formatPaymentMoney(pricingBreakdown.basePrice, selectedMenu.currency)}`,
+        `Payment-adjusted Price / 決済コスト調整後価格: ${formatPaymentMoney(pricingBreakdown.paymentAdjustedPrice, selectedMenu.currency)}`,
+        `Payment Method / 支払い方法: ${paymentMethodLabel}`,
+        `Variable Processing Rate / 変動決済率: ${(pricingBreakdown.variableProcessingRate * 100).toFixed(4)}%`,
+        `Pricing Reference Rate / 価格設計基準率: ${(pricingBreakdown.pricingReferenceRate * 100).toFixed(4)}%`,
+        `Final Customer Price / 最終販売価格: ${totalPriceSummary}`,
         paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
-        `支払い方法: ${paymentMethodLabel}`,
         `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
         receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
         receiptRequested ? `領収書送付先メール: ${receiptEmail || "未入力"}` : "",
@@ -1483,10 +1486,6 @@ function PurchaseDialog({
           <p><strong>{text.deliveryMode}</strong><span>{bookingForm.deliveryMode === "online" ? text.online : text.inPerson}</span></p>
           <p><strong>{text.duration}</strong><span>{bookingForm.durationMinutes}{text.minutes}</span></p>
           <p><strong>{text.count}</strong><span>{bookingForm.lessonCount}{text.lessons}</span></p>
-          <p><strong>{receiptCopy.baseAmount}</strong><span>{priceSummary}</span></p>
-          {paymentMethod === "PayPal" ? (
-            <p><strong>{receiptCopy.paypalFee}</strong><span>{paypalFeeLabel}（4.1%）</span></p>
-          ) : null}
           <p><strong>{receiptCopy.totalAmount}</strong><span>{totalPriceSummary}</span></p>
         </div>
         <div className="platform-form">
@@ -1548,12 +1547,6 @@ function PurchaseDialog({
                 <dt>{receiptCopy.amount}</dt>
                 <dd>{totalAmountLabel}</dd>
               </div>
-              {paymentMethod === "PayPal" ? (
-              <div>
-                <dt>{receiptCopy.paypalFee}</dt>
-                <dd>{paypalFeeLabel}（4.1%）</dd>
-              </div>
-              ) : null}
               {paymentMethod === "BankTransfer" ? (
               <div>
                 <dt>{receiptCopy.bankTransferFee}</dt>
@@ -1564,7 +1557,6 @@ function PurchaseDialog({
                 <dt>{receiptCopy.service}</dt>
                 <dd>
                   {selectedMenuText.category}：{selectedMenuText.name} / {deliveryLabel} / {bookingForm.durationMinutes}min. x {bookingForm.lessonCount}
-                  {paymentMethod === "PayPal" ? ` / ${receiptCopy.paypalFeeIncluded}` : ""}
                 </dd>
               </div>
               <div>
@@ -1958,7 +1950,6 @@ function TutorAvailabilityPage({
     currency: "USD" as "USD" | "JPY",
     unitPrice: 28,
     paymentMethod: "PayPal" as "PayPal" | "PayPay",
-    paypalFeeIncluded: false,
     paymentLink: "",
     receiptRequested: true,
     receiptName: "",
@@ -1985,9 +1976,11 @@ function TutorAvailabilityPage({
   });
   const isOwner = Boolean(adminToken);
   const purchaseOfferBaseTotal = purchaseOfferForm.unitPrice * purchaseOfferForm.quantity;
-  const purchaseOfferTotal = purchaseOfferForm.paymentMethod === "PayPal" && purchaseOfferForm.paypalFeeIncluded
-    ? (purchaseOfferForm.currency === "JPY" ? Math.round(purchaseOfferBaseTotal * 1.041) : Math.round(purchaseOfferBaseTotal * 1.041 * 100) / 100)
-    : purchaseOfferBaseTotal;
+  const purchaseOfferTotal = getPaymentPricingBreakdown(
+    purchaseOfferBaseTotal,
+    purchaseOfferForm.paymentMethod,
+    purchaseOfferForm.currency
+  ).finalCustomerPrice;
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
@@ -2902,7 +2895,7 @@ function TutorAvailabilityPage({
               決済方法
               <select value={purchaseOfferForm.paymentMethod} onChange={(event) => {
                 const paymentMethod = event.target.value as "PayPal" | "PayPay";
-                setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod, paypalFeeIncluded: paymentMethod === "PayPal" ? purchaseOfferForm.paypalFeeIncluded : false });
+                setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod });
               }}>
                 <option value="PayPal">PayPal</option>
                 <option value="PayPay">PayPay</option>
@@ -2913,16 +2906,6 @@ function TutorAvailabilityPage({
               <input type="url" value={purchaseOfferForm.paymentLink} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paymentLink: event.target.value })} placeholder="https://..." required />
             </label>
           </div>
-          {purchaseOfferForm.paymentMethod === "PayPal" ? (
-            <label className="checkbox-row receipt-request-row">
-              <span>PayPal決済手数料4.1%を請求額に加算する</span>
-              <input
-                type="checkbox"
-                checked={purchaseOfferForm.paypalFeeIncluded}
-                onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, paypalFeeIncluded: event.target.checked })}
-              />
-            </label>
-          ) : null}
           <label className="checkbox-row receipt-request-row">
             <span>領収書を発行する</span>
             <input type="checkbox" checked={purchaseOfferForm.receiptRequested} onChange={(event) => setPurchaseOfferForm({ ...purchaseOfferForm, receiptRequested: event.target.checked })} />
@@ -2942,7 +2925,9 @@ function TutorAvailabilityPage({
             <article key={offer.id}>
               <strong>{offer.offer_id} / {offer.students.name || offer.students.email}</strong>
               <span>{offer.package_label} / {offer.duration_minutes}分 × {offer.quantity}回</span>
-              <span>{offer.currency} {Number(offer.unit_price).toLocaleString()} × {offer.quantity} = {offer.currency} {Number(offer.total_amount).toLocaleString()}</span>
+              <span>基準価格: {offer.currency} {(Number(offer.base_price) || Number(offer.unit_price) * offer.quantity).toLocaleString()}</span>
+              <span>販売価格: {offer.currency} {Number(offer.final_customer_price || offer.total_amount).toLocaleString()} / 決済方法: {offer.payment_method}</span>
+              {typeof offer.pricing_reference_rate === "number" ? <span>価格設計基準率: {(offer.pricing_reference_rate * 100).toFixed(4)}%</span> : null}
               <span>状態: {offer.status === "paid" ? "入金確認済み" : offer.status === "cancelled" ? "取消" : "入金待ち"} / 領収書: {offer.receipt_requested ? (offer.receipt_sent_at ? "送信済み" : "希望あり") : "希望なし"}</span>
               {offer.status === "pending_payment" ? (
                 <button className="button primary" type="button" onClick={() => void markPurchaseOfferPaid(offer.id)} disabled={adminBusy}>
@@ -4318,7 +4303,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "カテゴリごとにコース内容を整理しています。各コースはタイルで確認できます。購入回数・時間は下の「コース購入」で選択できます。",
       purchaseTitle: "コース購入",
-      purchaseLead: "こちらからレッスンパッケージの購入が可能です。オンラインレッスンは、ご希望のレッスン形態を選択し「購入画面へ」を押してください。PayPalを選択した場合はレッスン料金に4.1%の決済手数料が加算され、口座振込を選択した場合の振込手数料は利用者負担となります。",
+      purchaseLead: "こちらからレッスンパッケージの購入が可能です。オンラインレッスンは、ご希望のレッスン形態を選択し「購入画面へ」を押してください。表示される販売価格は、支払い方法にかかわらず同一です。口座振込の振込手数料は利用者負担となります。",
       lessonMenu: "レッスンメニュー",
       selected: "選択中",
       duration: "授業時間",
@@ -4346,7 +4331,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "Lesson Menu",
       menuLead: "Lesson options are organized by learning purpose. Course details are shown as tiles, and lesson count and duration can be selected in Course Purchase below.",
       purchaseTitle: "Course Purchase",
-      purchaseLead: "You can request a lesson package purchase here. For online lessons, select your preferred lesson format and press “Purchase screen”. A 4.1% processing fee is added when PayPal is selected. Bank transfer fees are borne by the customer.",
+      purchaseLead: "You can request a lesson package purchase here. For online lessons, select your preferred lesson format and press “Purchase screen”. The displayed selling price is the same for every payment method. Bank transfer fees are borne by the customer.",
       lessonMenu: "Lesson menu",
       selected: "Selected",
       duration: "Duration",
@@ -4374,7 +4359,7 @@ function getLessonMenuLabelCopy(language: PlatformLanguage) {
       menuTitle: "課程選單",
       menuLead: "課程依學習目的整理。各課程以?片呈現，購買堂數與時間可在下方「課程購買」中選擇。",
       purchaseTitle: "課程購買",
-      purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。選擇 PayPal 時將加收 4.1% 付款手續費；選擇銀行轉帳時，轉帳手續費由學生負擔。",
+      purchaseLead: "可在此申請購買課程套組。線上課程請選擇希望的課程形式，並點選「前往購買畫面」。所有付款方式皆適用相同的顯示售價；銀行轉帳手續費由學生負擔。",
       lessonMenu: "課程選單",
       selected: "目前選擇",
       duration: "課程時間",
@@ -4614,8 +4599,6 @@ function getReceiptCopy(language: PlatformLanguage) {
       issueDate: "発行日",
       recipient: "宛名",
       amount: "金額",
-      baseAmount: "レッスン料金",
-      paypalFee: "PayPal決済手数料",
       bankTransfer: "口座振込",
       bankTransferFee: "振込手数料",
       bankTransferFeeNotice: "口座振込を選択した場合、金融機関に支払う振込手数料は利用者のご負担となります。",
@@ -4628,8 +4611,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       online: "オンライン",
       inPerson: "対面",
       notSet: "未入力",
-      paypalFeeIncluded: "PayPal決済手数料4.1%込み",
-      paymentNotice: "この画面では購入希望内容を送信します。決済はこの場では完了しません。PayPalを選択した場合はレッスン料金に4.1%の決済手数料を加算し、口座振込を選択した場合の振込手数料は利用者にご負担いただきます。",
+      paymentNotice: "この画面では購入希望内容を送信します。決済はこの場では完了しません。表示される販売価格は支払い方法にかかわらず同一です。口座振込の振込手数料は利用者にご負担いただきます。",
       note: "入金確認後に正式領収書として発行します。法人提出を想定し、宛名、発行日、金額、役務内容、支払方法、発行者情報、領収書番号を記載します。"
     },
     en: {
@@ -4639,8 +4621,6 @@ function getReceiptCopy(language: PlatformLanguage) {
       issueDate: "Issue Date",
       recipient: "Recipient",
       amount: "Amount",
-      baseAmount: "Lesson fee",
-      paypalFee: "PayPal processing fee",
       bankTransfer: "Bank transfer",
       bankTransferFee: "Bank transfer fee",
       bankTransferFeeNotice: "Any bank transfer fee charged by the financial institution is borne by the customer.",
@@ -4653,8 +4633,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       online: "Online",
       inPerson: "In person",
       notSet: "Not entered",
-      paypalFeeIncluded: "Includes the 4.1% PayPal processing fee",
-      paymentNotice: "This screen sends a purchase request; payment is not completed here. PayPal payments include a 4.1% processing fee. Any bank transfer fee is borne by the customer.",
+      paymentNotice: "This screen sends a purchase request; payment is not completed here. The displayed selling price is the same for every payment method. Any bank transfer fee is borne by the customer.",
       note: "The official receipt will be issued after payment confirmation. It includes the recipient, issue date, amount, service description, payment method, issuer information, and receipt number."
     },
     "zh-Hant": {
@@ -4664,8 +4643,6 @@ function getReceiptCopy(language: PlatformLanguage) {
       issueDate: "開立日期",
       recipient: "抬頭",
       amount: "金額",
-      baseAmount: "課程費用",
-      paypalFee: "PayPal 付款手續費",
       bankTransfer: "銀行轉帳",
       bankTransferFee: "轉帳手續費",
       bankTransferFeeNotice: "選擇銀行轉帳時，金融機構收取的轉帳手續費由學生負擔。",
@@ -4678,8 +4655,7 @@ function getReceiptCopy(language: PlatformLanguage) {
       online: "線上",
       inPerson: "實體",
       notSet: "未輸入",
-      paypalFeeIncluded: "含 4.1% PayPal 付款手續費",
-      paymentNotice: "此畫面僅送出購買申請，尚未完成付款。選擇 PayPal 時將加收 4.1% 付款手續費；選擇銀行轉帳時，轉帳手續費由學生負擔。",
+      paymentNotice: "此畫面僅送出購買申請，尚未完成付款。所有付款方式皆適用相同的顯示售價；銀行轉帳手續費由學生負擔。",
       note: "確認入款後，將開立正式收據。收據會包含抬頭、開立日期、金額、服務?容、付款方式、開立者資訊與收據編號。"
     }
   } satisfies Record<PlatformLanguage, Record<string, string>>;
@@ -4715,8 +4691,9 @@ function groupMenusByCategory<T extends { category: string }>(menus: T[]) {
 
 function buildPriceSummary(menu: LessonMenu, deliveryMode: DeliveryMode, durationMinutes: number, lessonCount: number) {
   const multiplier = deliveryMode === "inPerson" ? 1.8 : 1;
-  const total = calculateTotal(menu, durationMinutes, lessonCount, multiplier);
-  return `${formatMoney(total, menu.currency)} / ${durationMinutes}分 x ${lessonCount}回`;
+  const baseTotal = calculateTotal(menu, durationMinutes, lessonCount, multiplier);
+  const sellingPrice = getPaymentPricingBreakdown(baseTotal, "PayPal", menu.currency).finalCustomerPrice;
+  return `${formatPaymentMoney(sellingPrice, menu.currency)} / ${durationMinutes}分 x ${lessonCount}回`;
 }
 
 function calculateTotal(menu: LessonMenu, durationMinutes: number, lessonCount: number, multiplier = 1) {
@@ -4724,7 +4701,8 @@ function calculateTotal(menu: LessonMenu, durationMinutes: number, lessonCount: 
 }
 
 function formatUnitPrice(menu: LessonMenu, multiplier = 1) {
-  return `${formatMoney(menu.unitPrice * multiplier, menu.currency)} / ${menu.unitMinutes}min.`;
+  const sellingPrice = getPaymentPricingBreakdown(menu.unitPrice * multiplier, "PayPal", menu.currency).finalCustomerPrice;
+  return `${formatPaymentMoney(sellingPrice, menu.currency)} / ${menu.unitMinutes}min.`;
 }
 
 function formatMoney(value: number, currency: "USD" | "JPY") {
@@ -4733,10 +4711,6 @@ function formatMoney(value: number, currency: "USD" | "JPY") {
   }
 
   return `${Number.isInteger(value) ? value.toString() : value.toFixed(1)} USD`;
-}
-
-function roundPaymentAmount(value: number, currency: "USD" | "JPY") {
-  return currency === "JPY" ? Math.round(value) : Math.round(value * 100) / 100;
 }
 
 function formatPaymentMoney(value: number, currency: "USD" | "JPY") {

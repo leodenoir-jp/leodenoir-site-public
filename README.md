@@ -189,6 +189,14 @@ Learning講師画面のログイン情報は、`LEARNING_TUTOR_LOGIN_EMAIL`と`L
 
 この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPal / PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
 
+### 決済コストを考慮した販売価格
+
+Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割る逆算方式です。初期設定では `VITE_PAYPAL_VARIABLE_PROCESSING_RATE=0.041` を価格設計基準率として使用し、USDは小数第2位、JPYは整数に丸めます。PayPalの固定手数料はこの計算に含めません。
+
+顧客画面には決済手数料を別項目として表示せず、計算後の販売価格を表示します。現在の運用では販売価格は決済方法にかかわらず同一です。決済方法ごとの実際の変動率は、`VITE_PAYPAL_VARIABLE_PROCESSING_RATE`、`VITE_PAYPAY_VARIABLE_PROCESSING_RATE`、`VITE_BANK_TRANSFER_VARIABLE_PROCESSING_RATE` で個別に管理します。
+
+価格内訳を取引時点の履歴として保存するには、`supabase/migrations/20260827_payment_pricing_details.sql` をSupabase SQL Editorで実行してください。未適用の場合も購入案内は従来の列へフォールバックしますが、過去時点の率を正確に保持するため本番反映前の実行を推奨します。
+
 ## 個別カウンセリング予約
 
 - 公開予約ページ: `/counseling/booking`

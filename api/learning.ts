@@ -407,7 +407,7 @@ async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiReq
   const serviceClient = await createServiceClient();
   const { data: publicProfile, error: profileError } = await serviceClient
     .from("students")
-    .select("id,auth_user_id,student_id,email,name,provider,zoom_link,created_at")
+    .select("id,auth_user_id,student_id,email,name,provider,created_at")
     .eq("email", email)
     .maybeSingle();
   if (profileError) {

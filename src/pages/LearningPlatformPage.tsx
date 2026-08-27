@@ -1929,8 +1929,8 @@ function TutorAvailabilityPage({
   const [purchaseOffers, setPurchaseOffers] = useState<LearningPurchaseOffer[]>([]);
   const [adminStudents, setAdminStudents] = useState<LearningAdminStudent[]>([]);
   const [purchaseOffersReady, setPurchaseOffersReady] = useState(true);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
-  const [bookingCalendarMonth, setBookingCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
+  const [calendarMonth, setCalendarMonth] = useState(getCurrentCalendarMonth);
+  const [bookingCalendarMonth, setBookingCalendarMonth] = useState(getCurrentCalendarMonth);
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
   const [studentSearch, setStudentSearch] = useState("");
   const [activeTutorTab, setActiveTutorTab] = useState<"overview" | "students" | "availability" | "preview" | "purchase" | "reviews">("overview");
@@ -3078,8 +3078,8 @@ function StudentDashboard({
   const [authBusy, setAuthBusy] = useState(false);
   const [blockEmail, setBlockEmail] = useState("");
   const emailAuthRef = useRef<HTMLDivElement>(null);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
-  const [availabilityMonth, setAvailabilityMonth] = useState(() => new Date("2026-07-01T00:00:00+09:00"));
+  const [calendarMonth, setCalendarMonth] = useState(getCurrentCalendarMonth);
+  const [availabilityMonth, setAvailabilityMonth] = useState(getCurrentCalendarMonth);
   const [selectedBooking, setSelectedBooking] = useState<BookingRecord | null>(null);
   const [studentRequestTab, setStudentRequestTab] = useState<"change" | "contact">("change");
   const [contactForm, setContactForm] = useState({ subject: "", message: "" });
@@ -4001,6 +4001,11 @@ function formatCalendarMonth(year: number, monthIndex: number, language: Platfor
   if (language === "en") return `${new Intl.DateTimeFormat("en-US", { month: "long" }).format(new Date(year, monthIndex, 1))} ${year}`;
   if (language === "zh-Hant") return `${year}年${monthIndex + 1}月`;
   return `${year}年 ${monthIndex + 1}月`;
+}
+
+function getCurrentCalendarMonth() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
 function getWeekdayNames(language: PlatformLanguage) {

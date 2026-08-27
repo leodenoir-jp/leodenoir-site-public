@@ -414,7 +414,10 @@ async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiReq
 
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 100 });
-    if (error) throw error;
+    if (error) {
+      console.error("Exact student auth lookup failed.", { message: error.message, status: error.status });
+      return res.status(502).json({ message: `Supabase Auth lookup failed: ${error.message}` });
+    }
     const authUser = data.users.find((user) => user.email?.toLowerCase() === email);
     if (authUser) {
       const metadata = authUser.user_metadata && typeof authUser.user_metadata === "object"

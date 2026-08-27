@@ -457,6 +457,53 @@ async function findStudentById(body: Record<string, unknown>, req: ApiRequest, r
   return res.status(200).json({ found: Boolean(data), student: data ?? null });
 }
 
+async function findAuthStudentById(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId)) {
+    return res.status(400).json({ message: "Student IDを確認してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 100 });
+    if (error) {
+      console.error("Exact auth Student ID lookup failed.", { message: error.message, status: error.status });
+      return res.status(502).json({ message: `Supabase Auth lookup failed: ${error.message}` });
+    }
+    const authUser = data.users.find((user) => {
+      const metadata = user.user_metadata && typeof user.user_metadata === "object"
+        ? user.user_metadata as Record<string, unknown>
+        : {};
+      return [metadata.student_id, metadata.studentId]
+        .map((value) => cleanText(value).toUpperCase())
+        .includes(studentId);
+    });
+    if (authUser) {
+      const metadata = authUser.user_metadata && typeof authUser.user_metadata === "object"
+        ? authUser.user_metadata as Record<string, unknown>
+        : {};
+      const { data: publicProfile, error: profileError } = await serviceClient
+        .from("students")
+        .select("id,auth_user_id,student_id,email,name,provider,created_at")
+        .or(`auth_user_id.eq.${authUser.id},email.eq.${authUser.email ?? ""}`)
+        .limit(1)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      return res.status(200).json({
+        found: true,
+        email: authUser.email ?? "",
+        name: cleanText(metadata.full_name) || cleanText(metadata.name),
+        provider: authUser.app_metadata?.provider ?? "",
+        publicProfile: publicProfile ?? null
+      });
+    }
+    if (data.users.length < 100) break;
+  }
+
+  return res.status(200).json({ found: false, publicProfile: null });
+}
+
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const values = Array.isArray(body.slots) ? body.slots : [];
@@ -761,6 +808,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
     if (action === "find-auth-student-by-email") return await findAuthStudentByEmail(body, req, res);
     if (action === "find-student-by-id") return await findStudentById(body, req, res);
+    if (action === "find-auth-student-by-id") return await findAuthStudentById(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);

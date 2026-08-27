@@ -1,8 +1,3 @@
-import {
-  createPaymentPricingBreakdown,
-  normalizeVariableProcessingRate
-} from "../shared/paymentPricing";
-
 declare const process: {
   env: Record<string, string | undefined>;
 };
@@ -190,6 +185,15 @@ function formatMoney(amount: number, currency: "USD" | "JPY") {
   }).format(amount);
 }
 
+function normalizeVariableProcessingRate(value: string | number | undefined, fallback = 0.041) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed < 1 ? parsed : fallback;
+}
+
+function roundPaymentPrice(amount: number, currency: "USD" | "JPY") {
+  return currency === "JPY" ? Math.round(amount) : Math.round(amount * 100) / 100;
+}
+
 function paymentVariableRate(method: "PayPal" | "PayPay") {
   return method === "PayPal"
     ? normalizeVariableProcessingRate(process.env.VITE_PAYPAL_VARIABLE_PROCESSING_RATE)
@@ -199,13 +203,15 @@ function paymentVariableRate(method: "PayPal" | "PayPay") {
 function purchasePricing(unitPrice: number, quantity: number, currency: "USD" | "JPY", paymentMethod: "PayPal" | "PayPay") {
   const baseTotal = unitPrice * quantity;
   const pricingReferenceRate = normalizeVariableProcessingRate(process.env.VITE_PAYPAL_VARIABLE_PROCESSING_RATE);
-  return createPaymentPricingBreakdown({
+  const paymentAdjustedPrice = roundPaymentPrice(baseTotal / (1 - pricingReferenceRate), currency);
+  return {
     basePrice: baseTotal,
+    paymentAdjustedPrice,
     paymentMethod,
     variableProcessingRate: paymentVariableRate(paymentMethod),
     pricingReferenceRate,
-    currency
-  });
+    finalCustomerPrice: paymentAdjustedPrice
+  };
 }
 
 function renderEmailHtml(content: string) {

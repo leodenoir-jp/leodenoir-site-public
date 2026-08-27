@@ -440,6 +440,23 @@ async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiReq
   return res.status(200).json({ found: false, publicProfile: publicProfile ?? null });
 }
 
+async function findStudentById(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId)) {
+    return res.status(400).json({ message: "Student IDを確認してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const { data, error } = await serviceClient
+    .from("students")
+    .select("id,auth_user_id,student_id,email,name,provider,created_at")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (error) throw error;
+  return res.status(200).json({ found: Boolean(data), student: data ?? null });
+}
+
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const values = Array.isArray(body.slots) ? body.slots : [];
@@ -743,6 +760,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
     if (action === "find-auth-student-by-email") return await findAuthStudentByEmail(body, req, res);
+    if (action === "find-student-by-id") return await findStudentById(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);

@@ -306,16 +306,8 @@ async function updateLearningScheduleReservation(sourceId: string, active: boole
 
 const initialAvailabilitySlots: TutorAvailabilitySlot[] = [];
 const sampleAvailabilitySlotIds = new Set(["AV-1001", "AV-1002", "AV-1003", "AV-1004", "AV-1005", "AV-1006", "AV-1007", "AV-1008"]);
-const initialStudentProfiles: StudentProfile[] = [
-  {
-    studentId: "STU-2201",
-    name: demoCustomer.name,
-    email: demoCustomer.email,
-    provider: "email",
-    createdAt: "2026-07-20T10:00:00+09:00",
-    zoomLink: "https://zoom.us/j/leo-student-demo"
-  }
-];
+const initialStudentProfiles: StudentProfile[] = [];
+const removedDemoEmails = new Set(["mika@example.com", "ken@example.com"]);
 
 const initialBookingForm: BookingFormState = {
   name: "",
@@ -341,7 +333,9 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     if (!saved) return demoBookings;
     try {
       const parsed = JSON.parse(saved) as BookingRecord[];
-      return Array.isArray(parsed) ? parsed : demoBookings;
+      return Array.isArray(parsed)
+        ? parsed.filter((booking) => !removedDemoEmails.has(booking.studentEmail.toLowerCase()))
+        : demoBookings;
     } catch {
       return demoBookings;
     }
@@ -353,7 +347,9 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     if (!saved) return initialStudentProfiles;
     try {
       const parsed = JSON.parse(saved) as StudentProfile[];
-      return Array.isArray(parsed) ? parsed : initialStudentProfiles;
+      return Array.isArray(parsed)
+        ? parsed.filter((profile) => !removedDemoEmails.has(profile.email.toLowerCase()))
+        : initialStudentProfiles;
     } catch {
       return initialStudentProfiles;
     }
@@ -1941,6 +1937,8 @@ function TutorAvailabilityPage({
   const [studentRegistrationForm, setStudentRegistrationForm] = useState({ studentId: "", name: "", email: "" });
   const [lessonNoteDrafts, setLessonNoteDrafts] = useState<Record<string, string>>({});
   const [lessonNoteMessages, setLessonNoteMessages] = useState<Record<string, string>>({});
+  const [zoomLinkMessages, setZoomLinkMessages] = useState<Record<string, string>>({});
+  const [savingZoomEmail, setSavingZoomEmail] = useState("");
   const [form, setForm] = useState({
     startDate: "",
     startTime: "19:00",
@@ -2249,24 +2247,32 @@ function TutorAvailabilityPage({
   };
 
   const persistStudentZoomLink = async (summary: ReturnType<typeof buildStudentPackageSummary>, zoomLink: string) => {
+    const normalizedEmail = summary.email.toLowerCase();
+    setSavingZoomEmail(normalizedEmail);
+    setZoomLinkMessages((current) => ({ ...current, [normalizedEmail]: "保存中..." }));
     try {
-      await fetch("/api/student-zoom-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify({
-          studentId: summary.studentId,
-          name: summary.name,
-          email: summary.email,
-          zoomLink
-        })
+      const body = await postLearningAdmin<{ message?: string; student?: LearningAdminStudent }>({
+        action: "save-student-zoom-link",
+        studentId: summary.studentId,
+        email: summary.email,
+        zoomLink: zoomLink.trim()
       });
+      setAdminStudents((current) => current.map((student) => (
+        student.email.toLowerCase() === normalizedEmail
+          ? { ...student, zoom_link: body.student?.zoom_link ?? zoomLink.trim() }
+          : student
+      )));
+      setZoomLinkMessages((current) => ({
+        ...current,
+        [normalizedEmail]: body.message || "Zoomリンクを保存しました。"
+      }));
     } catch (error) {
-      console.error("Student zoom link save failed.", {
-        message: error instanceof Error ? error.message : "Unknown error"
-      });
+      setZoomLinkMessages((current) => ({
+        ...current,
+        [normalizedEmail]: error instanceof Error ? error.message : "Zoomリンクを保存できませんでした。"
+      }));
+    } finally {
+      setSavingZoomEmail("");
     }
   };
 
@@ -2621,14 +2627,26 @@ function TutorAvailabilityPage({
                     type="url"
                     value={summary.zoomLink}
                     onChange={(event) => updateStudentZoomLink(summary.email, event.target.value)}
-                    onBlur={(event) => void persistStudentZoomLink(summary, event.target.value)}
                     placeholder="https://zoom.us/j/..."
                   />
                 </label>
-                {summary.zoomLink ? (
-                  <a className="button secondary" href={summary.zoomLink} target="_blank" rel="noreferrer">
-                    レッスンリンクを開く
-                  </a>
+                <div className="button-row compact">
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={savingZoomEmail === summary.email.toLowerCase()}
+                    onClick={() => void persistStudentZoomLink(summary, summary.zoomLink)}
+                  >
+                    {savingZoomEmail === summary.email.toLowerCase() ? "保存中..." : "Zoomリンクを保存"}
+                  </button>
+                  {summary.zoomLink ? (
+                    <a className="button secondary" href={summary.zoomLink} target="_blank" rel="noreferrer">
+                      レッスンリンクを開く
+                    </a>
+                  ) : null}
+                </div>
+                {zoomLinkMessages[summary.email.toLowerCase()] ? (
+                  <p className="platform-muted" role="status">{zoomLinkMessages[summary.email.toLowerCase()]}</p>
                 ) : null}
               </article>
             ))}
@@ -3316,12 +3334,12 @@ function StudentDashboard({
               {authMode === "signup" ? (
                 <label>
                   {text.name}
-                  <input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="Mika Chen" />
+                  <input value={loginName} onChange={(event) => setLoginName(event.target.value)} placeholder="お名前" />
                 </label>
               ) : null}
               <label>
                 {authMode === "signup" ? text.registeredEmail : text.signInIdentifier}
-                <input type={authMode === "signup" ? "email" : "text"} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={authMode === "signup" ? "mika@example.com" : "STU-2201 / mika@example.com"} required />
+                <input type={authMode === "signup" ? "email" : "text"} value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder={authMode === "signup" ? "student@example.com" : "Student ID / student@example.com"} required />
               </label>
             </div>
           ) : null}
@@ -3935,7 +3953,7 @@ function buildStudentPackageSummaries(bookings: BookingRecord[], customer: Custo
     customer.email.toLowerCase(),
     ...bookings.map((booking) => booking.studentEmail.toLowerCase()),
     ...profiles.map((profile) => profile.email.toLowerCase())
-  ]));
+  ])).filter(Boolean);
   return emails.map((email) => {
     const profile = profiles.find((item) => item.email.toLowerCase() === email.toLowerCase());
     const studentCustomer = email === customer.email.toLowerCase()

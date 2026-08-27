@@ -586,6 +586,61 @@ async function grantPaidPackage(body: Record<string, unknown>, req: ApiRequest, 
   return res.status(200).json({ message: `${quantity}回分のパッケージを付与しました。`, student, lessonPackage: data });
 }
 
+async function saveStudentZoomLink(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  const email = cleanText(body.email).toLowerCase();
+  const zoomLink = cleanText(body.zoomLink);
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId) || !emailPattern.test(email)) {
+    return res.status(400).json({ message: "Student IDとメールアドレスを確認してください。" });
+  }
+  if (zoomLink && !/^https:\/\//i.test(zoomLink)) {
+    return res.status(400).json({ message: "Zoomリンクはhttps://から入力してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const { data, error } = await serviceClient
+    .from("students")
+    .update({ zoom_link: zoomLink || null, updated_at: new Date().toISOString() })
+    .eq("student_id", studentId)
+    .eq("email", email)
+    .select("id,student_id,email,zoom_link")
+    .maybeSingle();
+  if (error) {
+    if (/zoom_link/i.test(error.message)) {
+      return res.status(409).json({ message: "Supabaseのstudentsテーブルへzoom_link列を追加してください。" });
+    }
+    throw error;
+  }
+  if (!data) return res.status(404).json({ message: "対象の生徒が見つかりません。" });
+  return res.status(200).json({ message: "Zoomリンクを保存しました。", student: data });
+}
+
+async function deleteStudent(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId) || cleanText(body.confirmStudentId).toUpperCase() !== studentId) {
+    return res.status(400).json({ message: "削除対象のStudent IDを確認してください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const { data: student, error: findError } = await serviceClient
+    .from("students")
+    .select("id,auth_user_id,student_id,email,name")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (!student) return res.status(404).json({ message: "削除対象の生徒が見つかりません。" });
+
+  if (student.auth_user_id) {
+    const { error: authError } = await serviceClient.auth.admin.deleteUser(String(student.auth_user_id));
+    if (authError) throw authError;
+  }
+  const { error: deleteError } = await serviceClient.from("students").delete().eq("id", student.id);
+  if (deleteError) throw deleteError;
+  return res.status(200).json({ message: `${studentId}と関連データを削除しました。`, deletedStudent: { studentId, email: student.email } });
+}
+
 async function saveAvailability(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const values = Array.isArray(body.slots) ? body.slots : [];
@@ -893,6 +948,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "find-auth-student-by-id") return await findAuthStudentById(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "grant-paid-package") return await grantPaidPackage(body, req, res);
+    if (action === "save-student-zoom-link") return await saveStudentZoomLink(body, req, res);
+    if (action === "delete-student") return await deleteStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);
     if (action === "mark-offer-paid") return await markOfferPaid(body, req, res);
     return res.status(400).json({ message: "Unknown action." });

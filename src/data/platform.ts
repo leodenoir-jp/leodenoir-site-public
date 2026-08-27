@@ -473,76 +473,22 @@ export const englishPronunciationMenus: LessonMenu[] = [
   }
 ];
 
-export const demoBookings: BookingRecord[] = [
-  {
-    id: "BR-1029",
-    student: "Mika Chen",
-    studentEmail: "mika@example.com",
-    lessonKind: "japanese",
-    requestedAt: "2026-07-11T10:00:00+09:00",
-    requestedSlot: "2026-07-18T14:00:00+09:00",
-    timezone: "Asia/Tokyo",
-    status: "approved",
-    reason: "完了済みレッスン。敬語での依頼表現と会議内発言を練習。",
-    approvalGate: "none",
-    creditAction: "consumed"
-  },
-  {
-    id: "BR-1042",
-    student: "Mika Chen",
-    studentEmail: "mika@example.com",
-    lessonKind: "japanese",
-    requestedAt: "2026-07-25T09:30:00+09:00",
-    requestedSlot: "2026-07-28T20:00:00+09:00",
-    timezone: "Asia/Tokyo",
-    status: "requested",
-    approvalGate: "tutor",
-    creditAction: "hold"
-  },
-  {
-    id: "BR-1038",
-    student: "Ken Watanabe",
-    studentEmail: "ken@example.com",
-    lessonKind: "english",
-    requestedAt: "2026-07-24T18:10:00+09:00",
-    requestedSlot: "2026-07-26T08:30:00+09:00",
-    timezone: "Asia/Tokyo",
-    status: "reschedule_requested",
-    reason: "仕事の会議が入り、同日夜へ変更希望。",
-    approvalGate: "tutor",
-    creditAction: "restore_pending"
-  }
-];
+export const demoBookings: BookingRecord[] = [];
 
 export const demoCustomer: CustomerRecord = {
-  id: "CUS-2201",
-  name: "Mika Chen",
-  email: "mika@example.com",
+  id: "",
+  name: "",
+  email: "",
   status: "active",
-  language: "zh-Hant",
+  language: "ja",
   timezone: "Asia/Tokyo",
-  packageRemaining: 3,
-  lessonCredits: [
-    {
-      lessonKind: "japanese",
-      lessonMenuId: "jp-business-conversation",
-      packageLabel: "ビジネス会話 10レッスン",
-      currency: "USD",
-      unitPrice: 30,
-      purchasedLessons: 10,
-      remainingLessons: 3,
-      purchasedAt: "2026-07-20T10:00:00+09:00"
-    }
-  ],
-  renewalDue: "2026-08-12",
+  packageRemaining: 0,
+  lessonCredits: [],
+  renewalDue: "",
   consent: {
-    marketing: true,
+    marketing: false,
     dataExportRequested: false,
     deletionRequested: false
   },
-  timeline: [
-    { at: "2026-07-18", title: "Trial completed", detail: "Needs business Japanese for internal presentations.", source: "Manual intake" },
-    { at: "2026-07-20", title: "Package started", detail: "4 lesson package. Payment guidance was handled manually.", source: "Owner dashboard" },
-    { at: "2026-07-25", title: "Booking request", detail: "Requested next Japanese conversation lesson.", source: "Student dashboard" }
-  ]
+  timeline: []
 };

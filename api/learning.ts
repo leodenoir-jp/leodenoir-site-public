@@ -410,7 +410,10 @@ async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiReq
     .select("id,auth_user_id,student_id,email,name,provider,zoom_link,created_at")
     .eq("email", email)
     .maybeSingle();
-  if (profileError) throw profileError;
+  if (profileError) {
+    console.error("Exact student profile lookup failed.", { code: profileError.code, message: profileError.message });
+    return res.status(502).json({ message: `Student profile lookup failed: ${profileError.message}` });
+  }
 
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await serviceClient.auth.admin.listUsers({ page, perPage: 100 });

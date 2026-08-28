@@ -3886,7 +3886,15 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
   }
 
   let response: Response | null = null;
-  let body: { profile?: Partial<StudentProfile>; message?: string } = {};
+  type ProfileSyncSummary = {
+    source: string;
+    checkedAt: string;
+    packageCount: number;
+    purchasedLessons: number;
+    remainingLessons: number;
+  };
+  type SyncedProfile = Partial<StudentProfile> & { sync?: Partial<ProfileSyncSummary> };
+  let body: { profile?: SyncedProfile; message?: string } = {};
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       response = await fetch("/api/student-profile", {
@@ -3901,7 +3909,7 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
           provider
         })
       });
-      body = await response.json().catch(() => ({})) as { profile?: Partial<StudentProfile>; message?: string };
+      body = await response.json().catch(() => ({})) as { profile?: SyncedProfile; message?: string };
       if (response.ok || response.status < 500) break;
     } catch (error) {
       if (attempt === 2) throw error;
@@ -3917,6 +3925,24 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
   }
   if (!Array.isArray(body.profile.lessonCredits)) {
     throw new Error("Student package data was missing from the profile response.");
+  }
+  const sync = body.profile.sync;
+  const clientPackageCount = body.profile.lessonCredits.length;
+  const clientPurchasedLessons = body.profile.lessonCredits.reduce((total, item) => total + Number(item.purchasedLessons), 0);
+  const clientRemainingLessons = body.profile.lessonCredits.reduce((total, item) => total + Number(item.remainingLessons), 0);
+  if (
+    sync?.source !== "supabase"
+    || Number(sync.packageCount) !== clientPackageCount
+    || Number(sync.purchasedLessons) !== clientPurchasedLessons
+    || Number(sync.remainingLessons) !== clientRemainingLessons
+  ) {
+    console.error("Student data sync integrity alert.", {
+      path: window.location.pathname,
+      packageCountMatches: Number(sync?.packageCount) === clientPackageCount,
+      purchasedLessonsMatch: Number(sync?.purchasedLessons) === clientPurchasedLessons,
+      remainingLessonsMatch: Number(sync?.remainingLessons) === clientRemainingLessons
+    });
+    throw new Error("Student package synchronization integrity check failed.");
   }
 
   return {

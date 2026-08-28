@@ -85,11 +85,18 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
     .order("purchased_at", { ascending: false });
   if (error) throw error;
   const packages = (data ?? []) as LessonPackageRecord[];
-  console.info("Student package profile loaded.", {
-    studentId: record.student_id,
+  const sync = {
+    source: "supabase",
+    checkedAt: new Date().toISOString(),
     packageCount: packages.length,
     purchasedLessons: packages.reduce((total, item) => total + Number(item.purchased_lessons), 0),
     remainingLessons: packages.reduce((total, item) => total + Number(item.remaining_lessons), 0)
+  };
+  console.info("Student package profile loaded.", {
+    studentId: record.student_id,
+    packageCount: sync.packageCount,
+    purchasedLessons: sync.purchasedLessons,
+    remainingLessons: sync.remainingLessons
   });
   return {
     ...toProfile(record),
@@ -102,7 +109,8 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
       purchasedLessons: Number(item.purchased_lessons),
       remainingLessons: Number(item.remaining_lessons),
       purchasedAt: item.purchased_at
-    }))
+    })),
+    sync
   };
 }
 

@@ -84,9 +84,16 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
     .eq("student_id", record.id)
     .order("purchased_at", { ascending: false });
   if (error) throw error;
+  const packages = (data ?? []) as LessonPackageRecord[];
+  console.info("Student package profile loaded.", {
+    studentId: record.student_id,
+    packageCount: packages.length,
+    purchasedLessons: packages.reduce((total, item) => total + Number(item.purchased_lessons), 0),
+    remainingLessons: packages.reduce((total, item) => total + Number(item.remaining_lessons), 0)
+  });
   return {
     ...toProfile(record),
-    lessonCredits: ((data ?? []) as LessonPackageRecord[]).map((item) => ({
+    lessonCredits: packages.map((item) => ({
       lessonKind: item.lesson_kind,
       lessonMenuId: item.lesson_menu_id,
       packageLabel: item.package_label,
@@ -169,9 +176,20 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const { data: existing, error: findError } = await serviceClient
+    const { data: linkedRecord, error: linkedRecordError } = await serviceClient
       .from("students")
-      .select("id,student_id,name,email,provider,created_at")
+      .select("id,student_id,name,email,provider,zoom_link,created_at")
+      .eq("auth_user_id", userData.user.id)
+      .maybeSingle();
+
+    if (linkedRecordError) {
+      console.error("Student profile auth linkage lookup failed.", { message: linkedRecordError.message });
+      return res.status(500).json({ message: "Student profile lookup failed." });
+    }
+
+    const { data: emailRecord, error: findError } = await serviceClient
+      .from("students")
+      .select("id,student_id,name,email,provider,zoom_link,created_at")
       .eq("email", email)
       .maybeSingle();
 
@@ -180,17 +198,27 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
       return res.status(500).json({ message: "Student profile lookup failed." });
     }
 
+    const existing = linkedRecord ?? emailRecord;
+    if (linkedRecord && emailRecord && linkedRecord.id !== emailRecord.id) {
+      console.error("Student profile linkage conflict detected.", {
+        authStudentId: linkedRecord.student_id,
+        emailStudentId: emailRecord.student_id
+      });
+      return res.status(409).json({ message: "Student account linkage requires administrator review." });
+    }
+
     if (existing?.student_id) {
       const { data: updated, error: updateError } = await serviceClient
         .from("students")
         .update({
           auth_user_id: userData.user.id,
+          email,
           name: existing.name || name,
           provider,
           updated_at: new Date().toISOString()
         })
-        .eq("email", email)
-        .select("id,student_id,name,email,provider,created_at")
+        .eq("id", existing.id)
+        .select("id,student_id,name,email,provider,zoom_link,created_at")
         .single();
 
       if (updateError) {
@@ -211,14 +239,14 @@ export default async function handler(req: StudentProfileRequest, res: StudentPr
         name,
         provider
       })
-      .select("id,student_id,name,email,provider,created_at")
+      .select("id,student_id,name,email,provider,zoom_link,created_at")
       .single();
 
     if (insertError) {
       if (insertError.code === "23505") {
         const { data: racedExisting } = await serviceClient
           .from("students")
-          .select("id,student_id,name,email,provider,created_at")
+          .select("id,student_id,name,email,provider,zoom_link,created_at")
           .eq("email", email)
           .maybeSingle();
 

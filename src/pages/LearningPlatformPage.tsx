@@ -341,7 +341,9 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     }
   });
   const [customer] = useState<CustomerRecord>(demoCustomer);
-  const [studentEmail, setStudentEmail] = useState(() => window.localStorage.getItem(studentEmailKey) ?? "");
+  const [studentEmail, setStudentEmail] = useState(() => (
+    isSupabaseConfigured() ? "" : window.localStorage.getItem(studentEmailKey) ?? ""
+  ));
   const [studentProfiles, setStudentProfilesBase] = useState<StudentProfile[]>(() => {
     const saved = window.localStorage.getItem(studentProfilesStorageKey);
     if (!saved) return initialStudentProfiles;
@@ -354,14 +356,15 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       return initialStudentProfiles;
     }
   });
+  const studentProfilesRef = useRef(studentProfiles);
   const [bookingForm, setBookingForm] = useState<BookingFormState>(initialBookingForm);
   const [bookingMessage, setBookingMessage] = useState("");
   const [authStatus, setAuthStatus] = useState<AuthStatus>(() => (
-    hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey) ? "checking" : "idle"
+    isSupabaseConfigured() || hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey) ? "checking" : "idle"
   ));
   const [authStatusMessage, setAuthStatusMessage] = useState(() => (
-    hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey)
-      ? "Googleログインの状態を確認しています。少しだけお待ちください。"
+    isSupabaseConfigured() || hasAuthCallbackInUrl() || window.sessionStorage.getItem(authPendingKey)
+      ? "ログイン状態と購入情報を確認しています。少しだけお待ちください。"
       : ""
   ));
   const [blockedStudents, setBlockedStudents] = useState<string[]>(initialBlockedStudents);
@@ -387,6 +390,10 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   const mode = getMode(route.path);
   const selectedProduct = lessonProducts.find((product) => route.path.endsWith(product.kind)) ?? lessonProducts[0];
   const supabaseAvailable = isSupabaseConfigured();
+
+  useEffect(() => {
+    studentProfilesRef.current = studentProfiles;
+  }, [studentProfiles]);
 
   useEffect(() => {
     let mounted = true;
@@ -442,30 +449,37 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
     const applyUser = async (user: SupabaseUserLike | null) => {
       if (!mounted || !user?.email) return false;
-      let profile: StudentProfile;
       try {
-        profile = await ensureSupabaseStudentProfile(user, studentProfiles);
+        const profile = await ensureSupabaseStudentProfile(user, studentProfilesRef.current);
+        if (!mounted) return false;
+        setStudentProfilesBase((current) => {
+          const profileExists = current.some((item) => item.email.toLowerCase() === profile.email.toLowerCase());
+          const nextProfiles = profileExists
+            ? current.map((item) => item.email.toLowerCase() === profile.email.toLowerCase() ? profile : item)
+            : [...current, profile];
+          studentProfilesRef.current = nextProfiles;
+          window.localStorage.setItem(studentProfilesStorageKey, JSON.stringify(nextProfiles));
+          return nextProfiles;
+        });
+        setStudentEmail(profile.email);
+        setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
+        window.localStorage.setItem(studentEmailKey, profile.email);
+        window.sessionStorage.removeItem(authPendingKey);
+        setAuthStatus("signed-in");
+        setAuthStatusMessage("ログインが完了し、購入情報を読み込みました。");
+        return true;
       } catch (error) {
         console.error("Supabase student profile sync failed.", {
           message: error instanceof Error ? error.message : "Unknown error"
         });
-        profile = buildStudentProfileFromSupabaseUser(user, studentProfiles);
+        if (!mounted) return false;
+        setStudentEmail("");
+        window.localStorage.removeItem(studentEmailKey);
+        window.sessionStorage.removeItem(authPendingKey);
+        setAuthStatus("failed");
+        setAuthStatusMessage("ログインは確認できましたが、購入情報を読み込めませんでした。ページを再読み込みしてもう一度お試しください。");
+        return false;
       }
-      if (!mounted) return false;
-      if (studentProfiles.some((item) => item.email.toLowerCase() === profile.email.toLowerCase())) {
-        setStudentProfiles(studentProfiles.map((item) => (
-          item.email.toLowerCase() === profile.email.toLowerCase() ? { ...item, ...profile } : item
-        )));
-      } else {
-        setStudentProfiles([...studentProfiles, profile]);
-      }
-      setStudentEmail(profile.email);
-      setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
-      window.localStorage.setItem(studentEmailKey, profile.email);
-      window.sessionStorage.removeItem(authPendingKey);
-      setAuthStatus("signed-in");
-      setAuthStatusMessage("Googleログインが完了しました。");
-      return true;
     };
 
     const resolveAuthSession = async () => {
@@ -483,6 +497,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       }
 
       let applied = false;
+      let authenticatedUserSeen = false;
       const hasAuthCode = new URLSearchParams(window.location.search).has("code");
       if (hasAuthCode) {
         const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
@@ -492,6 +507,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
           setAuthStatusMessage(`Googleログイン後の確認でエラーが発生しました：${error.message}`);
         } else {
           window.history.replaceState({}, "", window.location.pathname);
+          authenticatedUserSeen = Boolean(data.session?.user);
           applied = await applyUser(data.session?.user ?? null);
         }
       }
@@ -500,18 +516,25 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       if (error) {
         console.error("Supabase session lookup failed.", { message: error.message });
       }
+      authenticatedUserSeen = Boolean(data.session?.user) || authenticatedUserSeen;
       applied = (await applyUser(data.session?.user ?? null)) || applied;
 
       const userResult = await supabase.auth.getUser();
       if (userResult.error) {
         console.error("Supabase user lookup failed.", { message: userResult.error.message });
       }
+      authenticatedUserSeen = Boolean(userResult.data.user) || authenticatedUserSeen;
       applied = (await applyUser(userResult.data.user)) || applied;
 
-      if (hasAuthReturn && !applied) {
+      if (hasAuthReturn && !applied && !authenticatedUserSeen) {
         window.sessionStorage.removeItem(authPendingKey);
         setAuthStatus("failed");
         setAuthStatusMessage("Googleログイン後のセッションを確認できませんでした。SupabaseのRedirect URLとVercelの環境変数を確認してください。");
+      } else if (!applied && !authenticatedUserSeen) {
+        setStudentEmail("");
+        window.localStorage.removeItem(studentEmailKey);
+        setAuthStatus("idle");
+        setAuthStatusMessage("");
       }
     };
 
@@ -524,7 +547,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       mounted = false;
       data.subscription.unsubscribe();
     };
-  }, [studentProfiles]);
+  }, []);
 
   const handleLanguageChange = (nextLanguage: PlatformLanguage) => {
     setLanguage(nextLanguage);
@@ -3838,22 +3861,6 @@ function mapSupabaseProvider(provider: unknown): StudentProfile["provider"] {
   return "email";
 }
 
-function buildStudentProfileFromSupabaseUser(user: SupabaseUserLike, localProfiles: StudentProfile[]): StudentProfile {
-  const email = user.email?.toLowerCase() ?? "";
-  const provider = mapSupabaseProvider(user.app_metadata?.provider);
-  const fallbackName = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : email.split("@")[0];
-  const localProfile = localProfiles.find((profile) => profile.email.toLowerCase() === email);
-
-  return localProfile ?? {
-    studentId: generateStudentId(localProfiles),
-    name: fallbackName,
-    email,
-    provider,
-    createdAt: new Date().toISOString(),
-    zoomLink: ""
-  };
-}
-
 async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfiles: StudentProfile[]) {
   const supabase = getSupabaseClient();
   const email = user.email?.toLowerCase() ?? "";
@@ -3878,22 +3885,38 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     throw new Error(sessionError?.message || "Supabase session token was not found.");
   }
 
-  const response = await fetch("/api/student-profile", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      name: localProfile?.name ?? fallbackName,
-      provider
-    })
-  });
+  let response: Response | null = null;
+  let body: { profile?: Partial<StudentProfile>; message?: string } = {};
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetch("/api/student-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          name: localProfile?.name ?? fallbackName,
+          provider
+        })
+      });
+      body = await response.json().catch(() => ({})) as { profile?: Partial<StudentProfile>; message?: string };
+      if (response.ok || response.status < 500) break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+  }
 
-  const body = await response.json().catch(() => ({})) as { profile?: Partial<StudentProfile>; message?: string };
+  if (!response) {
+    throw new Error("Student profile sync did not return a response.");
+  }
   if (!response.ok || !body.profile?.email || !body.profile?.studentId) {
     throw new Error(body.message || "Student profile sync failed.");
+  }
+  if (!Array.isArray(body.profile.lessonCredits)) {
+    throw new Error("Student package data was missing from the profile response.");
   }
 
   return {
@@ -3903,7 +3926,7 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     provider: mapSupabaseProvider(body.profile.provider),
     createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString()),
     zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || ""),
-    lessonCredits: Array.isArray(body.profile.lessonCredits) ? body.profile.lessonCredits : localProfile?.lessonCredits ?? []
+    lessonCredits: body.profile.lessonCredits
   };
 }
 

@@ -181,7 +181,8 @@ function formatMoney(amount: number, currency: "USD" | "JPY") {
   return new Intl.NumberFormat(currency === "USD" ? "en-US" : "ja-JP", {
     style: "currency",
     currency,
-    maximumFractionDigits: currency === "JPY" ? 0 : 2
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
   }).format(amount);
 }
 
@@ -191,7 +192,8 @@ function normalizeVariableProcessingRate(value: string | number | undefined, fal
 }
 
 function roundPaymentPrice(amount: number, currency: "USD" | "JPY") {
-  return currency === "JPY" ? Math.round(amount) : Math.round(amount * 100) / 100;
+  void currency;
+  return Math.ceil(amount);
 }
 
 function paymentVariableRate(method: "PayPal" | "PayPay") {

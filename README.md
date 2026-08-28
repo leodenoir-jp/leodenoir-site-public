@@ -191,7 +191,7 @@ Learning講師画面のログイン情報は、`LEARNING_TUTOR_LOGIN_EMAIL`と`L
 
 ### 決済コストを考慮した販売価格
 
-Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割る逆算方式です。初期設定では `VITE_PAYPAL_VARIABLE_PROCESSING_RATE=0.041` を価格設計基準率として使用し、USDは小数第2位、JPYは整数に丸めます。PayPalの固定手数料はこの計算に含めません。
+Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割る逆算方式です。初期設定では `VITE_PAYPAL_VARIABLE_PROCESSING_RATE=0.041` を価格設計基準率として使用し、決済コスト調整後の価格に小数が生じた場合はUSD・JPYとも通貨の整数単位へ切り上げます。PayPalの固定手数料はこの計算に含めません。
 
 顧客画面には決済手数料を別項目として表示せず、計算後の販売価格を表示します。現在の運用では販売価格は決済方法にかかわらず同一です。決済方法ごとの実際の変動率は、`VITE_PAYPAL_VARIABLE_PROCESSING_RATE`、`VITE_PAYPAY_VARIABLE_PROCESSING_RATE`、`VITE_BANK_TRANSFER_VARIABLE_PROCESSING_RATE` で個別に管理します。
 

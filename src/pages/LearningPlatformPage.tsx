@@ -4755,18 +4755,18 @@ function formatUnitPrice(menu: LessonMenu, multiplier = 1) {
 
 function formatMoney(value: number, currency: "USD" | "JPY") {
   if (currency === "JPY") {
-    return `${Math.round(value).toLocaleString("ja-JP")} JPY`;
+    return `${Math.ceil(value).toLocaleString("ja-JP")} JPY`;
   }
 
-  return `${Number.isInteger(value) ? value.toString() : value.toFixed(1)} USD`;
+  return `${Math.ceil(value).toLocaleString("en-US")} USD`;
 }
 
 function formatPaymentMoney(value: number, currency: "USD" | "JPY") {
   if (currency === "JPY") {
-    return `${Math.round(value).toLocaleString("ja-JP")} JPY`;
+    return `${Math.ceil(value).toLocaleString("ja-JP")} JPY`;
   }
 
-  return `${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+  return `${Math.ceil(value).toLocaleString("en-US")} USD`;
 }
 
 function formatDateTime(value: string) {

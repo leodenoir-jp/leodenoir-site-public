@@ -23,7 +23,8 @@ export function normalizeVariableProcessingRate(
 }
 
 export function roundPaymentPrice(amount: number, currency: PaymentCurrency) {
-  return currency === "JPY" ? Math.round(amount) : Math.round(amount * 100) / 100;
+  void currency;
+  return Math.ceil(amount);
 }
 
 export function calculatePaymentAdjustedPrice(

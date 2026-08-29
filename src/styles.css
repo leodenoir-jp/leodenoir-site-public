@@ -1454,6 +1454,32 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.review-list-header {
+  align-items: end;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.review-list-header h3,
+.review-list-header p {
+  margin-bottom: 0;
+}
+
+.review-sort-control {
+  display: grid;
+  flex: 0 1 240px;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.review-sort-control span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .review-form-compact {
   gap: 12px;
   padding: 18px;
@@ -2765,6 +2791,17 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .review-list-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .review-sort-control {
+    flex-basis: auto;
+    min-width: 0;
+  }
+
   .tutor-admin-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

@@ -75,6 +75,8 @@ type LessonReview = {
   status: "approved" | "pending";
 };
 
+type ReviewSort = "date-desc" | "date-asc" | "rating-desc" | "rating-asc";
+
 type MenuDisplayText = {
   category: string;
   name: string;
@@ -1821,7 +1823,17 @@ function LessonReviewPage({
   const [reviewEmail, setReviewEmail] = useState(studentEmail);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5>(5);
   const [comment, setComment] = useState("");
-  const approvedReviews = reviews.filter((review) => review.status === "approved");
+  const [reviewSort, setReviewSort] = useState<ReviewSort>("date-desc");
+  const approvedReviews = useMemo(() => {
+    const nextReviews = reviews.filter((review) => review.status === "approved");
+    return nextReviews.sort((left, right) => {
+      const dateDifference = getLessonReviewTimestamp(right.postedAt) - getLessonReviewTimestamp(left.postedAt);
+      if (reviewSort === "date-asc") return -dateDifference;
+      if (reviewSort === "rating-desc") return right.rating - left.rating || dateDifference;
+      if (reviewSort === "rating-asc") return left.rating - right.rating || dateDifference;
+      return dateDifference;
+    });
+  }, [reviewSort, reviews]);
   const text = getReviewCopy(language);
 
   const submitReview = (event: FormEvent<HTMLFormElement>) => {
@@ -1886,8 +1898,21 @@ function LessonReviewPage({
       </form>
 
       <section className="platform-card">
-        <h3>{text.reviewsTitle}</h3>
-        <p className="platform-muted">{text.reviewsNote}</p>
+        <div className="review-list-header">
+          <div>
+            <h3>{text.reviewsTitle}</h3>
+            <p className="platform-muted">{text.reviewsNote}</p>
+          </div>
+          <label className="review-sort-control">
+            <span>{text.sortLabel}</span>
+            <select value={reviewSort} onChange={(event) => setReviewSort(event.target.value as ReviewSort)}>
+              <option value="date-desc">{text.sortDateDesc}</option>
+              <option value="date-asc">{text.sortDateAsc}</option>
+              <option value="rating-desc">{text.sortRatingDesc}</option>
+              <option value="rating-asc">{text.sortRatingAsc}</option>
+            </select>
+          </label>
+        </div>
         <div className="review-grid">
           {approvedReviews.length > 0 ? approvedReviews.map((review) => (
             <ReviewCard key={review.id} review={review} />
@@ -4650,7 +4675,12 @@ function getReviewCopy(language: PlatformLanguage) {
       email: "メールアドレス",
       rating: "評価",
       comment: "コメント",
-      submit: "レビューを送信"
+      submit: "レビューを送信",
+      sortLabel: "並び順",
+      sortDateDesc: "投稿日：新しい順",
+      sortDateAsc: "投稿日：古い順",
+      sortRatingDesc: "評価：高い順",
+      sortRatingAsc: "評価：低い順"
     },
     en: {
       title: "Lesson Reviews",
@@ -4665,7 +4695,12 @@ function getReviewCopy(language: PlatformLanguage) {
       email: "Email",
       rating: "Rating",
       comment: "Comment",
-      submit: "Submit review"
+      submit: "Submit review",
+      sortLabel: "Sort by",
+      sortDateDesc: "Date: newest first",
+      sortDateAsc: "Date: oldest first",
+      sortRatingDesc: "Rating: highest first",
+      sortRatingAsc: "Rating: lowest first"
     },
     "zh-Hant": {
       title: "課程評價",
@@ -4680,7 +4715,12 @@ function getReviewCopy(language: PlatformLanguage) {
       email: "電子郵件",
       rating: "評分",
       comment: "留言",
-      submit: "送出評價"
+      submit: "送出評價",
+      sortLabel: "排序",
+      sortDateDesc: "日期：由新到舊",
+      sortDateAsc: "日期：由舊到新",
+      sortRatingDesc: "評分：由高到低",
+      sortRatingAsc: "評分：由低到高"
     }
   };
 
@@ -4830,6 +4870,17 @@ function formatDateTime(value: string) {
     minute: "2-digit",
     timeZoneName: "short"
   }).format(date);
+}
+
+function getLessonReviewTimestamp(value: string) {
+  const japaneseDate = value.match(/^(\d{1,2})月\s*(\d{1,2}),\s*(\d{4})$/);
+  if (japaneseDate) {
+    const [, month, day, year] = japaneseDate;
+    return Date.UTC(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function formatTime(value: string) {

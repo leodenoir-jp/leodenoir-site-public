@@ -455,6 +455,110 @@ export const importedLessonReviews: ImportedLessonReview[] = [
         "comment":  "Wide variety of teaching methods, very helpful",
         "postedAt":  "5月 2, 2026",
         "status":  "approved"
+    },
+    {
+        "id":  "LR-057",
+        "studentName":  "Jhen",
+        "rating":  5,
+        "comment":  "Leo先生🦁！\r\nおかげさまで面接に合格して、無事に内定をもらえました！！まだ会社には正式なお返事をしていないのですが、まずは先生にご報告したくて！応援していただき、本当にありがとうございます！❤️🙏\r\n\r\n托Leo🦁老師的福，這次日本公司的面試及格，順利拿到內定！第一時間先跟老師報告！真的非常感謝老師這段時間的協助、加油與支持！❤️🙏",
+        "postedAt":  "8月 17, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-058",
+        "studentName":  "kiki",
+        "rating":  5,
+        "comment":  "謝謝老師!回想起我平常使用的日文都很直接。\r\n「〜ということではないんですよね？」→ということではないですよね？\r\n「〜た方がよさそうですね」→したほうがいいです\r\n「〜しているところです」→しています\r\n「〜する必要がありそうですね」→する必要があります\r\n「それでしたら〜」 →では or じゃあ",
+        "postedAt":  "8月 17, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-059",
+        "studentName":  "kiki",
+        "rating":  5,
+        "comment":  "先生ありがとうございます。今後とも厳しく指導をよろしくお願いいたします。",
+        "postedAt":  "8月 15, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-060",
+        "studentName":  "min",
+        "rating":  5,
+        "comment":  "とても素敵でした\r\n人生初のレッスンは先生に任せられて幸いです",
+        "postedAt":  "7月 3, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-061",
+        "studentName":  "YunChen",
+        "rating":  5,
+        "comment":  "感謝老師這段時間的教學，除了可以根據個人需求提供適配教材之外，在課程中也會適時調整學生的口說音調、分享商業上與人應對的小技巧，老師人很溫柔，即使剛提醒過的音調，學生還沒立刻適應改過來，也還是會溫柔、不厭其煩的提醒，或是想不同的方法幫助學生記憶，每次上課都覺得很開心很有趣！祝福老師一切順心~~謝謝老師！！",
+        "postedAt":  "8月 21, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-062",
+        "studentName":  "YunChen",
+        "rating":  5,
+        "comment":  "老師細心溫柔的教學，慢慢調整正確發音，提供了很多專為產品設計的說法，有很大的幫助🥰",
+        "postedAt":  "8月 15, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-063",
+        "studentName":  "Lily",
+        "rating":  5,
+        "comment":  "Highly recommend the Japanese self-introduction lesson with Leo! 🌟\r\nShe provided great advice on how to adjust a personal self-introduction from a Japanese cultural perspective, which is incredibly valuable and practical for anyone applying to a Japanese company. Thank you so much for the amazing lesson!!! 🙏❤️",
+        "postedAt":  "8月 13, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-064",
+        "studentName":  "denise",
+        "rating":  5,
+        "comment":  "針對我工作上可能會需要的內容，希望自己的日文能盡量接近日本人一樣的說話方式，謝謝老師陪我一起解讀分析跟發音練習。",
+        "postedAt":  "8月 2, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-065",
+        "studentName":  "denise",
+        "rating":  5,
+        "comment":  "謝謝老師陪我一起練習簡報的內容，並且告知我如何針對報告內容做語氣跟語速方面的調整，讓聽的人更可以理解說的人想強調的地方。",
+        "postedAt":  "8月 9, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-066",
+        "studentName":  "Sena",
+        "rating":  5,
+        "comment":  "老師很好聊天也會糾正發音跟語氣 好讚",
+        "postedAt":  "8月 18, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-067",
+        "studentName":  "Yang",
+        "rating":  5,
+        "comment":  "老師超厲害~~~~~ 幫我設計了超級適合我的上課方式。謝謝老師~~",
+        "postedAt":  "8月 13, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-068",
+        "studentName":  "John Yeh",
+        "rating":  5,
+        "comment":  "會話練習很足",
+        "postedAt":  "8月 10, 2026",
+        "status":  "approved"
+    },
+    {
+        "id":  "LR-069",
+        "studentName":  "John Yeh",
+        "rating":  5,
+        "comment":  "學到很多，老師也很好",
+        "postedAt":  "8月 3, 2026",
+        "status":  "approved"
     }
 ];
 

@@ -330,10 +330,11 @@ async function listAvailability(res: ApiResponse) {
 async function listAdmin(req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const serviceClient = await createServiceClient();
-  const [slotsResult, offersResult, initialStudentsResult] = await Promise.all([
+  const [slotsResult, offersResult, initialStudentsResult, bookingsResult] = await Promise.all([
     serviceClient.from("availability_slots").select("id,starts_at,ends_at,timezone,delivery_mode,note").order("starts_at", { ascending: true }),
     serviceClient.from("lesson_purchase_offers").select("*,students(id,student_id,email,name)").order("offered_at", { ascending: false }),
-    serviceClient.from("students").select("id,student_id,email,name,zoom_link,lesson_packages(lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at)").order("created_at", { ascending: false })
+    serviceClient.from("students").select("id,student_id,email,name,zoom_link,lesson_packages(lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at)").order("created_at", { ascending: false }),
+    serviceClient.from("bookings").select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,students(student_id,email,name)").order("requested_slot", { ascending: true })
   ]);
   let studentsResult = initialStudentsResult;
   if (studentsResult.error && /zoom_link/i.test(studentsResult.error.message)) {
@@ -343,6 +344,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
       .order("created_at", { ascending: false });
   }
   if (slotsResult.error) throw slotsResult.error;
+  if (bookingsResult.error) throw bookingsResult.error;
   const purchaseOffersReady = !offersResult.error;
   const studentsReady = !studentsResult.error;
   if (offersResult.error) {
@@ -361,6 +363,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
     slots: slotsResult.data ?? [],
     offers: purchaseOffersReady ? offersResult.data ?? [] : [],
     students: studentsReady ? studentsResult.data ?? [] : [],
+    bookings: bookingsResult.data ?? [],
     purchaseOffersReady,
     studentsReady
   });

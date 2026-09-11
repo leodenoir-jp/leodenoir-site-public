@@ -148,7 +148,7 @@ export function AboutPage({ route }: { route: Route }) {
               </li>
               <li>独立後3ヶ月間で、自事業における各種サービス200件成約。</li>
               <li>タロットカード鑑定 2,150件実施。（2026年8月31日時点）</li>
-              <li>1on1日本語レッスン 累計 50名、670レッスン完了。（2026年8月31日時点）</li>
+              <li>1on1日本語レッスン 累計 50名、730レッスン完了。（2026年9月15日時点）</li>
             </ul>
           </div>
         </div>
@@ -170,7 +170,7 @@ export function AboutPage({ route }: { route: Route }) {
             <h3>語学</h3>
             <ul>
               <li>TOEIC 950点</li>
-              <li>TOEFL iBT 112点</li>
+              <li>TOEFL iBT 112点（バンドル 5.5）</li>
             </ul>
           </article>
           <article className="info-block">

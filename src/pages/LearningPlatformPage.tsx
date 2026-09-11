@@ -54,6 +54,7 @@ type StudentProfile = {
   createdAt: string;
   zoomLink?: string;
   lessonCredits?: CustomerRecord["lessonCredits"];
+  bookings?: BookingRecord[];
 };
 
 type SupabaseUserLike = {
@@ -464,6 +465,13 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
           return nextProfiles;
         });
         setStudentEmail(profile.email);
+        setBookingsBase((current) => {
+          const syncedBookings = profile.bookings ?? [];
+          const syncedIds = new Set(syncedBookings.map((booking) => booking.id));
+          const nextBookings = [...syncedBookings, ...current.filter((booking) => !syncedIds.has(booking.id))];
+          window.localStorage.setItem(bookingsStorageKey, JSON.stringify(nextBookings));
+          return nextBookings;
+        });
         setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
         window.localStorage.setItem(studentEmailKey, profile.email);
         window.sessionStorage.removeItem(authPendingKey);
@@ -2091,6 +2099,34 @@ function TutorAvailabilityPage({
     note: typeof slot.note === "string" ? slot.note : ""
   });
 
+  const mapAdminBooking = (record: Record<string, unknown>, students: LearningAdminStudent[]): BookingRecord => {
+    const relation = Array.isArray(record.students) ? record.students[0] : record.students;
+    const student = relation && typeof relation === "object" ? relation as Record<string, unknown> : {};
+    const email = String(student.email || "").toLowerCase();
+    const adminStudent = students.find((item) => item.email.toLowerCase() === email);
+    const lessonMenuId = typeof record.lesson_menu_id === "string" ? record.lesson_menu_id : undefined;
+    const lessonPackage = adminStudent?.lesson_packages?.find((item) => item.lesson_menu_id === lessonMenuId);
+    const rawStatus = String(record.status || "requested");
+    const status: BookingStatus = ["requested", "approved", "reschedule_requested", "cancel_requested", "cancelled"].includes(rawStatus)
+      ? rawStatus as BookingStatus
+      : "requested";
+    return {
+      id: String(record.id),
+      student: String(student.name || email.split("@")[0] || "Student"),
+      studentEmail: email,
+      lessonKind: record.lesson_kind === "english" ? "english" : "japanese",
+      lessonMenuId,
+      courseLabel: lessonPackage?.package_label,
+      requestedAt: String(record.requested_at),
+      requestedSlot: String(record.requested_slot),
+      timezone: String(record.timezone || "Asia/Tokyo"),
+      status,
+      reason: typeof record.note === "string" && record.note.trim() ? record.note : undefined,
+      approvalGate: status === "approved" ? "none" : "tutor",
+      creditAction: status === "approved" ? "consumed" : "hold"
+    };
+  };
+
   const loadLearningAdmin = async (token: string) => {
     const response = await fetch("/api/learning?mode=admin", {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
@@ -2100,12 +2136,19 @@ function TutorAvailabilityPage({
       slots?: Array<Record<string, unknown>>;
       offers?: LearningPurchaseOffer[];
       students?: LearningAdminStudent[];
+      bookings?: Array<Record<string, unknown>>;
       purchaseOffersReady?: boolean;
     };
     if (!response.ok) throw new Error(body.message || "講師管理データを取得できませんでした。");
     setAvailabilitySlots((body.slots ?? []).map(mapAdminSlot));
     setPurchaseOffers(body.offers ?? []);
-    setAdminStudents(body.students ?? []);
+    const nextStudents = body.students ?? [];
+    setAdminStudents(nextStudents);
+    const syncedBookings = (body.bookings ?? []).map((record) => mapAdminBooking(record, nextStudents));
+    setBookings((current) => {
+      const syncedIds = new Set(syncedBookings.map((booking) => booking.id));
+      return [...syncedBookings, ...current.filter((booking) => !syncedIds.has(booking.id))];
+    });
     setPurchaseOffersReady(body.purchaseOffersReady !== false);
   };
 
@@ -3917,6 +3960,7 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     packageCount: number;
     purchasedLessons: number;
     remainingLessons: number;
+    bookingCount: number;
   };
   type SyncedProfile = Partial<StudentProfile> & { sync?: Partial<ProfileSyncSummary> };
   let body: { profile?: SyncedProfile; message?: string } = {};
@@ -3951,6 +3995,9 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
   if (!Array.isArray(body.profile.lessonCredits)) {
     throw new Error("Student package data was missing from the profile response.");
   }
+  if (!Array.isArray(body.profile.bookings)) {
+    throw new Error("Student booking data was missing from the profile response.");
+  }
   const sync = body.profile.sync;
   const clientPackageCount = body.profile.lessonCredits.length;
   const clientPurchasedLessons = body.profile.lessonCredits.reduce((total, item) => total + Number(item.purchasedLessons), 0);
@@ -3960,12 +4007,14 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     || Number(sync.packageCount) !== clientPackageCount
     || Number(sync.purchasedLessons) !== clientPurchasedLessons
     || Number(sync.remainingLessons) !== clientRemainingLessons
+    || Number(sync.bookingCount) !== body.profile.bookings.length
   ) {
     console.error("Student data sync integrity alert.", {
       path: window.location.pathname,
       packageCountMatches: Number(sync?.packageCount) === clientPackageCount,
       purchasedLessonsMatch: Number(sync?.purchasedLessons) === clientPurchasedLessons,
-      remainingLessonsMatch: Number(sync?.remainingLessons) === clientRemainingLessons
+      remainingLessonsMatch: Number(sync?.remainingLessons) === clientRemainingLessons,
+      bookingCountMatches: Number(sync?.bookingCount) === body.profile.bookings.length
     });
     throw new Error("Student package synchronization integrity check failed.");
   }
@@ -3977,7 +4026,8 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     provider: mapSupabaseProvider(body.profile.provider),
     createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString()),
     zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || ""),
-    lessonCredits: body.profile.lessonCredits
+    lessonCredits: body.profile.lessonCredits,
+    bookings: body.profile.bookings
   };
 }
 
@@ -4053,6 +4103,7 @@ function formatPackageProgressForBooking(booking: BookingRecord, bookings: Booki
 }
 
 function getBookingCourseName(booking: BookingRecord, language: PlatformLanguage = "ja") {
+  if (booking.courseLabel) return booking.courseLabel;
   const firstDetail = booking.reason?.split(" / ")[0]?.trim();
   if (firstDetail && !firstDetail.startsWith("完了済みレッスン")) return firstDetail;
   const fallbackMenu = getLessonMenus(booking.lessonKind)[0];

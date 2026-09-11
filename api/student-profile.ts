@@ -41,6 +41,17 @@ type LessonPackageRecord = {
   purchased_at: string;
 };
 
+type BookingRecord = {
+  id: string;
+  lesson_kind: "japanese" | "english";
+  lesson_menu_id: string | null;
+  requested_at: string;
+  requested_slot: string;
+  timezone: string;
+  status: string;
+  note: string | null;
+};
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizeBody(body: unknown): StudentProfilePayload {
@@ -78,25 +89,36 @@ function toProfile(record: StudentRecord) {
 }
 
 async function toProfileWithPackages(serviceClient: any, record: StudentRecord) {
-  const { data, error } = await serviceClient
-    .from("lesson_packages")
-    .select("lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at")
-    .eq("student_id", record.id)
-    .order("purchased_at", { ascending: false });
-  if (error) throw error;
-  const packages = (data ?? []) as LessonPackageRecord[];
+  const [packagesResult, bookingsResult] = await Promise.all([
+    serviceClient
+      .from("lesson_packages")
+      .select("lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at")
+      .eq("student_id", record.id)
+      .order("purchased_at", { ascending: false }),
+    serviceClient
+      .from("bookings")
+      .select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note")
+      .eq("student_id", record.id)
+      .order("requested_slot", { ascending: true })
+  ]);
+  if (packagesResult.error) throw packagesResult.error;
+  if (bookingsResult.error) throw bookingsResult.error;
+  const packages = (packagesResult.data ?? []) as LessonPackageRecord[];
+  const bookings = (bookingsResult.data ?? []) as BookingRecord[];
   const sync = {
     source: "supabase",
     checkedAt: new Date().toISOString(),
     packageCount: packages.length,
     purchasedLessons: packages.reduce((total, item) => total + Number(item.purchased_lessons), 0),
-    remainingLessons: packages.reduce((total, item) => total + Number(item.remaining_lessons), 0)
+    remainingLessons: packages.reduce((total, item) => total + Number(item.remaining_lessons), 0),
+    bookingCount: bookings.length
   };
   console.info("Student package profile loaded.", {
     studentId: record.student_id,
     packageCount: sync.packageCount,
     purchasedLessons: sync.purchasedLessons,
-    remainingLessons: sync.remainingLessons
+    remainingLessons: sync.remainingLessons,
+    bookingCount: sync.bookingCount
   });
   return {
     ...toProfile(record),
@@ -110,6 +132,27 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
       remainingLessons: Number(item.remaining_lessons),
       purchasedAt: item.purchased_at
     })),
+    bookings: bookings.map((item) => {
+      const lessonPackage = packages.find((entry) => entry.lesson_menu_id === item.lesson_menu_id);
+      const status = ["requested", "approved", "reschedule_requested", "cancel_requested", "cancelled"].includes(item.status)
+        ? item.status
+        : "requested";
+      return {
+        id: item.id,
+        student: record.name || record.email.split("@")[0],
+        studentEmail: record.email.toLowerCase(),
+        lessonKind: item.lesson_kind,
+        lessonMenuId: item.lesson_menu_id || undefined,
+        courseLabel: lessonPackage?.package_label || undefined,
+        requestedAt: item.requested_at,
+        requestedSlot: item.requested_slot,
+        timezone: item.timezone || "Asia/Tokyo",
+        status,
+        reason: item.note || undefined,
+        approvalGate: status === "approved" ? "none" : "tutor",
+        creditAction: status === "approved" ? "consumed" : "hold"
+      };
+    }),
     sync
   };
 }

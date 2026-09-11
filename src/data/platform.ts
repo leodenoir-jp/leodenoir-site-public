@@ -59,6 +59,8 @@ export type BookingRecord = {
   student: string;
   studentEmail: string;
   lessonKind: LessonKind;
+  lessonMenuId?: string;
+  courseLabel?: string;
   requestedAt: string;
   requestedSlot: string;
   timezone: string;

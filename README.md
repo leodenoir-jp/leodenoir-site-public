@@ -181,6 +181,8 @@ Student Page のサインイン / サインアップは、Supabase Auth に接�
 
 `SUPABASE_SERVICE_ROLE_KEY` はサーバー側だけで使用します。GitHub、フロントエンドコード、公開ページには記載しないでください。
 
+VercelのSupabase Integrationを使用している場合、ビルドはIntegrationが登録する`SUPABASE_URL`と`SUPABASE_PUBLISHABLE_KEY`（または`SUPABASE_ANON_KEY`）も公開クライアント設定として利用します。サービスロールキーはフロントエンドへ渡しません。
+
 ### 講師の空き枠・生徒別購入案内
 
 講師管理画面で登録した単日・定期の空き枠は、`availability_slots` に保存され、Student Pageの候補枠へ反映されます。購入案内では25分または50分、回数、単価、PayPalまたはPayPayの決済リンクを指定できます。単価はUSDでは0〜100ドル、JPYでは0〜30,000円（10,000円までは500円刻み、それ以降は1,000円刻み）で設定できます。講師が入金確認を実行すると、生徒の保有回数へ反映し、領収書希望時は領収書ファイルをメールへ添付します。

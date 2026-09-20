@@ -449,6 +449,8 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     const supabase = getSupabaseClient();
     if (!supabase) return;
     let mounted = true;
+    let initializingSession = true;
+    let authChangeTimer: number | undefined;
 
     const applyUser = async (user: SupabaseUserLike | null) => {
       if (!mounted || !user?.email) return false;
@@ -506,35 +508,16 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         setAuthStatusMessage("Googleログインの状態を確認しています。少しだけお待ちください。");
       }
 
-      let applied = false;
-      let authenticatedUserSeen = false;
-      const hasAuthCode = new URLSearchParams(window.location.search).has("code");
-      if (hasAuthCode) {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
-        if (error) {
-          console.error("Supabase OAuth callback exchange failed.", { message: error.message });
-          setAuthStatus("failed");
-          setAuthStatusMessage(`Googleログイン後の確認でエラーが発生しました：${error.message}`);
-        } else {
-          window.history.replaceState({}, "", window.location.pathname);
-          authenticatedUserSeen = Boolean(data.session?.user);
-          applied = await applyUser(data.session?.user ?? null);
-        }
-      }
-
+      // The SDK consumes the one-time PKCE code during initialization.
+      // getSession waits for that initialization; a second exchange would fail.
       const { data, error } = await supabase.auth.getSession();
+      if (!mounted) return;
       if (error) {
         console.error("Supabase session lookup failed.", { message: error.message });
       }
-      authenticatedUserSeen = Boolean(data.session?.user) || authenticatedUserSeen;
-      applied = (await applyUser(data.session?.user ?? null)) || applied;
-
-      const userResult = await supabase.auth.getUser();
-      if (userResult.error) {
-        console.error("Supabase user lookup failed.", { message: userResult.error.message });
-      }
-      authenticatedUserSeen = Boolean(userResult.data.user) || authenticatedUserSeen;
-      applied = (await applyUser(userResult.data.user)) || applied;
+      const authenticatedUserSeen = Boolean(data.session?.user);
+      const applied = await applyUser(data.session?.user ?? null);
+      if (!mounted) return;
 
       if (hasAuthReturn && !applied && !authenticatedUserSeen) {
         window.sessionStorage.removeItem(authPendingKey);
@@ -548,13 +531,24 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       }
     };
 
-    void resolveAuthSession();
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      void applyUser(session?.user ?? null);
+    void resolveAuthSession().catch((error: unknown) => {
+      console.error("Supabase session initialization failed.", {
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+      if (!mounted) return;
+      setAuthStatus("failed");
+      setAuthStatusMessage("ログイン情報を確認できませんでした。ページを再読み込みしてもう一度お試しください。");
+    }).finally(() => { initializingSession = false; });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (initializingSession || event === "INITIAL_SESSION" || !session?.user) return;
+      window.clearTimeout(authChangeTimer);
+      // Profile loading calls Auth APIs, so run it after the Auth callback releases its lock.
+      authChangeTimer = window.setTimeout(() => { void applyUser(session.user); }, 0);
     });
 
     return () => {
       mounted = false;
+      window.clearTimeout(authChangeTimer);
       data.subscription.unsubscribe();
     };
   }, []);

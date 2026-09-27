@@ -39,7 +39,7 @@ export function CalendarDayEntries({
 
 export function AvailabilityCalendarLegend({ language = "ja" }: { language?: keyof typeof copy }) {
   const labels = {
-    ja: { available: "予約可能", booked: "予約済み" },
+    ja: { available: "予約可能", booked: "予約済" },
     en: { available: "Available", booked: "Booked" },
     "zh-Hant": { available: "可預約", booked: "已預約" }
   }[language];

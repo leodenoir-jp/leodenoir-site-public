@@ -2599,7 +2599,7 @@ function TutorAvailabilityPage({
 
       <section className="platform-card">
         <h3>予約カレンダー</h3>
-        <p className="platform-muted">予約済み・リクエスト中の枠をクリックすると、受講者とパッケージ消化状況を確認できます。</p>
+        <p className="platform-muted">予約済・リクエスト中の枠をクリックすると、受講者とパッケージ消化状況を確認できます。</p>
         <BookingCalendar
           month={bookingCalendarMonth}
           setMonth={setBookingCalendarMonth}
@@ -3649,15 +3649,21 @@ function BookingCalendar({
       <div className="calendar-grid">
         {cells.map((date, index) => {
           const dateKey = date ? toDateKey(date) : `blank-${index}`;
-          const dayBookings = date ? bookings.filter((booking) => toDateKey(new Date(booking.requestedSlot)) === dateKey) : [];
+          const dayBookings = date ? bookings
+            .filter((booking) => toDateKey(new Date(booking.requestedSlot)) === dateKey)
+            .sort((a, b) => new Date(a.requestedSlot).getTime() - new Date(b.requestedSlot).getTime()) : [];
           return (
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}
-              {dayBookings.map((booking) => (
-                <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
-                  {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
-                </button>
-              ))}
+              {date ? (
+                <CalendarDayEntries language={language}>
+                  {dayBookings.map((booking) => (
+                    <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
+                      {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
+                    </button>
+                  ))}
+                </CalendarDayEntries>
+              ) : null}
             </div>
           );
         })}

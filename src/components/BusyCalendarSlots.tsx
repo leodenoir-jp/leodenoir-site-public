@@ -25,7 +25,7 @@ export function BusyCalendarSlot({ range, language = "ja" }: {
   range: BusyCalendarRange;
   language?: "ja" | "en" | "zh-Hant";
 }) {
-  const label = { ja: "予約済み", en: "Booked", "zh-Hant": "已預約" }[language];
+  const label = { ja: "予約済", en: "Booked", "zh-Hant": "已預約" }[language];
   const time = (value: number) => new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(value);
   return (
     <span className="calendar-booking external-busy">

@@ -29,6 +29,8 @@ using `list_events` with `filter: "categories/any(c:c eq 'AT')"`, explicit ISO
 start/end offsets and `top: 200`. This expands recurring occurrences/exceptions.
 Keep only busy, non-cancelled results. Preserve the original Outlook start/end,
 including any buffers the owner entered; do not subtract 5/10 minutes.
+Outlook data is occupancy only: never write it to `availability_slots`, counseling
+weekly rules, date overrides, or any other source of publicly bookable blue slots.
 
 Verify category filtering with a non-existent category (it must return zero).
 If a response errors, is truncated, has a next_link, or hits the result limit,

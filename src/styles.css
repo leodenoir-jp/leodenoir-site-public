@@ -2152,15 +2152,15 @@ textarea {
 }
 
 .calendar-booking.available {
-  background: #edf4f7;
-  border-color: var(--line);
-  border-left-color: var(--blue);
+  background: #e4f0f7;
+  border-color: #9cb6c8;
+  border-left-color: #5f8ca9;
 }
 
 .calendar-booking.available.inPerson {
-  background: #f8efe7;
-  border-color: #dfc4aa;
-  border-left-color: #c08855;
+  background: #e4f0f7;
+  border-color: #9cb6c8;
+  border-left-color: #5f8ca9;
 }
 
 .calendar-booking.available.selected {
@@ -2428,6 +2428,65 @@ textarea {
 
 .counseling-calendar-legend i.learning {
   background: #c08855;
+}
+
+.availability-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.availability-calendar-legend span {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  gap: 6px;
+}
+
+.availability-calendar-legend i {
+  border: 1px solid transparent;
+  border-radius: 3px;
+  display: inline-block;
+  height: 12px;
+  width: 18px;
+}
+
+.availability-calendar-legend i.available {
+  background: #e4f0f7;
+  border-color: #9cb6c8;
+}
+
+.availability-calendar-legend i.booked {
+  background: #e5e7eb;
+  border-color: #cbd0d7;
+}
+
+.calendar-day-entries {
+  min-width: 0;
+}
+
+.calendar-see-more {
+  background: transparent;
+  border: 0;
+  color: var(--navy);
+  cursor: pointer;
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.3;
+  margin: 4px 0 0;
+  padding: 3px 2px;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  width: 100%;
+}
+
+.calendar-see-more:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
 }
 
 .calendar-booking.external-busy {

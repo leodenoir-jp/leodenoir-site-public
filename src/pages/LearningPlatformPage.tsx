@@ -2,7 +2,8 @@
 import type { Route } from "../App";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
-import { BusyCalendarSlots, type BusySlot } from "../components/BusyCalendarSlots";
+import { BusyCalendarSlot, getBusySlotsForDate, type BusySlot } from "../components/BusyCalendarSlots";
+import { AvailabilityCalendarLegend, CalendarDayEntries } from "../components/CalendarDayEntries";
 import { getPaymentPricingBreakdown } from "../config/paymentPricing";
 import { importedLessonReviews } from "../data/lessonReviews";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
@@ -158,7 +159,6 @@ const studentEmailKey = "ldn-platform-student-email";
 const tutorSessionKey = "ldn-platform-tutor-session-email";
 const tutorAdminSessionKey = "ldn-counseling-admin-session";
 const authPendingKey = "ldn-platform-auth-pending";
-const availabilityStorageKey = "ldn-platform-tutor-availability";
 const bookingsStorageKey = "ldn-platform-bookings";
 const studentProfilesStorageKey = "ldn-platform-student-profiles";
 const ownerEmail = "yu.leobiz003@outlook.com";
@@ -308,8 +308,6 @@ async function updateLearningScheduleReservation(sourceId: string, active: boole
   }
 }
 
-const initialAvailabilitySlots: TutorAvailabilitySlot[] = [];
-const sampleAvailabilitySlotIds = new Set(["AV-1001", "AV-1002", "AV-1003", "AV-1004", "AV-1005", "AV-1006", "AV-1007", "AV-1008"]);
 const initialStudentProfiles: StudentProfile[] = [];
 const removedDemoEmails = new Set(["mika@example.com", "ken@example.com"]);
 
@@ -373,16 +371,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   ));
   const [blockedStudents, setBlockedStudents] = useState<string[]>(initialBlockedStudents);
   const [reviews, setReviews] = useState<LessonReview[]>(importedLessonReviews);
-  const [availabilitySlots, setAvailabilitySlotsBase] = useState<TutorAvailabilitySlot[]>(() => {
-    const saved = window.localStorage.getItem(availabilityStorageKey);
-    if (!saved) return initialAvailabilitySlots;
-    try {
-      const parsed = JSON.parse(saved) as TutorAvailabilitySlot[];
-      return Array.isArray(parsed) ? parsed.filter((slot) => !sampleAvailabilitySlotIds.has(slot.id)) : initialAvailabilitySlots;
-    } catch {
-      return initialAvailabilitySlots;
-    }
-  });
+  const [availabilitySlots, setAvailabilitySlotsBase] = useState<TutorAvailabilitySlot[]>([]);
   const [sharedAvailabilitySlots, setSharedAvailabilitySlots] = useState<TutorAvailabilitySlot[]>([]);
   const [sharedReservations, setSharedReservations] = useState<SharedScheduleReservation[]>([]);
   const [changeRequest, setChangeRequest] = useState<RequestChange>({
@@ -562,7 +551,6 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   const setAvailabilitySlots = (nextSlots: TutorAvailabilitySlot[] | ((current: TutorAvailabilitySlot[]) => TutorAvailabilitySlot[])) => {
     setAvailabilitySlotsBase((current) => {
       const resolved = typeof nextSlots === "function" ? nextSlots(current) : nextSlots;
-      window.localStorage.setItem(availabilityStorageKey, JSON.stringify(resolved));
       return resolved;
     });
   };
@@ -3742,6 +3730,7 @@ function AvailabilityCalendar({
         <strong>{formatCalendarMonth(year, monthIndex, language)}</strong>
         <button type="button" onClick={() => moveMonth(1)} aria-label={getStudentPageCopy(language).nextMonth}>&gt;</button>
       </div>
+      <AvailabilityCalendarLegend language={language} />
       <div className="calendar-weekdays">
         {getWeekdayNames(language).map((day) => <span key={day}>{day}</span>)}
       </div>
@@ -3749,13 +3738,18 @@ function AvailabilityCalendar({
         {cells.map((date, index) => {
           const dateKey = date ? toDateKey(date) : `blank-${index}`;
           const daySlots = date ? slots.filter((slot) => toDateKey(new Date(slot.start)) === dateKey) : [];
-          return (
-            <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
-              {date ? <span className="calendar-date">{date.getDate()}</span> : null}
-              {date ? <BusyCalendarSlots slots={busySlots} dateKey={dateKey} language={language} /> : null}
-              {daySlots.map((slot) => {
-                const selected = selectedSlotIds.includes(slot.id);
-                return (
+          const dayEntries = date ? [
+            ...getBusySlotsForDate(busySlots, dateKey).map((range) => ({
+              key: `busy-${range.key}`,
+              start: range.start,
+              node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} language={language} />
+            })),
+            ...daySlots.map((slot) => {
+              const selected = selectedSlotIds.includes(slot.id);
+              return {
+                key: slot.id,
+                start: Date.parse(slot.start),
+                node: (
                   <button
                     key={slot.id}
                     className={`calendar-booking available ${slot.deliveryMode}${selected ? " selected" : ""}`}
@@ -3767,8 +3761,14 @@ function AvailabilityCalendar({
                   >
                     {formatTime(slot.start)}-{formatTime(slot.end)} {formatDeliveryMode(slot.deliveryMode, language)}
                   </button>
-                );
-              })}
+                )
+              };
+            })
+          ].sort((a, b) => a.start - b.start) : [];
+          return (
+            <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
+              {date ? <span className="calendar-date">{date.getDate()}</span> : null}
+              {date ? <CalendarDayEntries language={language}>{dayEntries.map((entry) => entry.node)}</CalendarDayEntries> : null}
             </div>
           );
         })}

@@ -106,7 +106,7 @@ Zoomリンク：{{zoomLink}}
 };
 
 export const defaultWeeklyRules: Record<string, WeeklyRule> = Object.fromEntries(
-  Array.from({ length: 7 }, (_, day) => [String(day), { enabled: day >= 1 && day <= 5, start: "10:00", end: "18:00" }])
+  Array.from({ length: 7 }, (_, day) => [String(day), { enabled: false, start: "10:00", end: "18:00" }])
 );
 
 export function defaultSettings(): CounselingSettings {

@@ -1,7 +1,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import type { Route } from "../App";
 import { Seo } from "../components/Seo";
-import { BusyCalendarSlots, type BusySlot } from "../components/BusyCalendarSlots";
+import { BusyCalendarSlot, getBusySlotsForDate, type BusySlot } from "../components/BusyCalendarSlots";
+import { AvailabilityCalendarLegend, CalendarDayEntries } from "../components/CalendarDayEntries";
 
 type CounselingSlot = {
   id: string;
@@ -350,26 +351,38 @@ function CounselingCalendar({
         <strong>{month.getFullYear()}年 {month.getMonth() + 1}月</strong>
         <button type="button" aria-label="次の月" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button>
       </div>
+      <AvailabilityCalendarLegend />
       <div className="calendar-weekdays">{weekdayLabels.map((label) => <span key={label}>{label}</span>)}</div>
       <div className="calendar-grid">
         {cells.map((date, index) => {
           if (!date) return <div className="calendar-cell blank" key={`blank-${index}`} />;
           const key = toLocalDateKey(date);
           const daySlots = slots.filter((slot) => toJstDateKey(slot.start) === key);
-          return (
-            <div className="calendar-cell" key={key}>
-              <span className="calendar-date">{date.getDate()}</span>
-              <BusyCalendarSlots slots={busySlots} dateKey={key} />
-              {daySlots.map((slot) => (
+          const dayEntries = [
+            ...getBusySlotsForDate(busySlots, key).map((range) => ({
+              key: `busy-${range.key}`,
+              start: range.start,
+              node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} />
+            })),
+            ...daySlots.map((slot) => ({
+              key: slot.id,
+              start: Date.parse(slot.start),
+              node: (
                 <button
                   className={`calendar-booking available${selectedSlot?.id === slot.id ? " selected" : ""}`}
                   key={slot.id}
                   type="button"
                   onClick={() => onSelect(slot)}
                 >
-                  {formatTime(slot.start)}
+                  {formatTime(slot.start)}-{formatTime(slot.end)}
                 </button>
-              ))}
+              )
+            }))
+          ].sort((a, b) => a.start - b.start);
+          return (
+            <div className="calendar-cell" key={key}>
+              <span className="calendar-date">{date.getDate()}</span>
+              <CalendarDayEntries>{dayEntries.map((entry) => entry.node)}</CalendarDayEntries>
             </div>
           );
         })}

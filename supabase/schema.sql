@@ -177,7 +177,7 @@ create table if not exists public.counseling_settings (
   lead_hours numeric not null default 18 check (lead_hours >= 0),
   horizon_days integer not null default 14 check (horizon_days between 1 and 120),
   daily_limit integer not null default 3 check (daily_limit between 1 and 30),
-  weekly_rules jsonb not null default '{"0":{"enabled":false,"start":"10:00","end":"18:00"},"1":{"enabled":true,"start":"10:00","end":"18:00"},"2":{"enabled":true,"start":"10:00","end":"18:00"},"3":{"enabled":true,"start":"10:00","end":"18:00"},"4":{"enabled":true,"start":"10:00","end":"18:00"},"5":{"enabled":true,"start":"10:00","end":"18:00"},"6":{"enabled":false,"start":"10:00","end":"18:00"}}'::jsonb,
+  weekly_rules jsonb not null default '{"0":{"enabled":false,"start":"10:00","end":"18:00"},"1":{"enabled":false,"start":"10:00","end":"18:00"},"2":{"enabled":false,"start":"10:00","end":"18:00"},"3":{"enabled":false,"start":"10:00","end":"18:00"},"4":{"enabled":false,"start":"10:00","end":"18:00"},"5":{"enabled":false,"start":"10:00","end":"18:00"},"6":{"enabled":false,"start":"10:00","end":"18:00"}}'::jsonb,
   date_overrides jsonb not null default '[]'::jsonb,
   public_guidance text not null default '',
   provisional_template text not null default '',

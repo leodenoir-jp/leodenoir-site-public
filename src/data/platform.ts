@@ -211,36 +211,30 @@ export const lessonProducts: LessonProduct[] = [
 export const lessonVideos: Record<LessonKind, Record<PlatformLanguage, LessonVideo[]>> = {
   japanese: {
     ja: [
-      { id: "introduction-ja", title: "自己紹介", description: "", order: 1, youtubeId: "OgsQqh4evww" },
-      { id: "lesson-benefits-ja", title: "レッスンの利点", description: "", order: 2, youtubeId: "Ff4zyDseiGU" },
-      { id: "course-features-ja", title: "コースの特徴", description: "", order: 3, youtubeId: "QHqSnFG4icU" }
+      { id: "introduction-ja", title: "自己紹介", description: "", order: 1, youtubeId: "m7fYT0YVVgY" },
+      { id: "lesson-benefits-ja", title: "レッスンの利点", description: "", order: 2, youtubeId: "_BFKeejGVh8" },
+      { id: "course-features-ja", title: "コースの特徴", description: "", order: 3, youtubeId: "ZNVhL1yvW5E" }
     ],
     en: [
-      { id: "introduction-en", title: "Introduction", description: "", order: 1, youtubeId: "9tlVmnbNT_s" },
-      { id: "lesson-benefits-en", title: "Lesson Benefits", description: "", order: 2, youtubeId: "DQAthtpz_4g" },
-      { id: "course-features-en", title: "Course Features", description: "", order: 3, youtubeId: "qaIOagr07Lc" }
+      { id: "introduction-en", title: "Introduction", description: "", order: 1, youtubeId: "Q7dFyoAiA74" },
+      { id: "lesson-benefits-en", title: "Lesson Benefits", description: "", order: 2, youtubeId: "4isrvjv1ZQ0" },
+      { id: "course-features-en", title: "Course Features", description: "", order: 3, youtubeId: "PgST3sTprT4" }
     ],
     "zh-Hant": [
-      { id: "introduction-zh-hant", title: "自我介紹", description: "", order: 1, youtubeId: "OgsQqh4evww" },
-      { id: "lesson-benefits-zh-hant", title: "課程優勢", description: "", order: 2, youtubeId: "Ff4zyDseiGU" },
-      { id: "course-features-zh-hant", title: "課程特色", description: "", order: 3, youtubeId: "QHqSnFG4icU" }
+      { id: "introduction-zh-hant", title: "自我介紹", description: "", order: 1, youtubeId: "Q7dFyoAiA74" },
+      { id: "lesson-benefits-zh-hant", title: "課程優勢", description: "", order: 2, youtubeId: "4isrvjv1ZQ0" },
+      { id: "course-features-zh-hant", title: "課程特色", description: "", order: 3, youtubeId: "PgST3sTprT4" }
     ]
   },
   english: {
     ja: [
-      { id: "english-introduction-ja", title: "自己紹介", description: "講師と、発音コーチングで大切にしている考え方をご紹介します。", order: 1, youtubeId: "" },
-      { id: "english-benefits-ja", title: "発音コーチングの利点", description: "伝わりやすい英語へ近づくための練習方法をご案内します。", order: 2, youtubeId: "" },
-      { id: "english-features-ja", title: "コースの特徴", description: "目的と回数に合わせて選べるコースをご紹介します。", order: 3, youtubeId: "" }
+      { id: "english-introduction-ja", title: "自己紹介", description: "", order: 1, youtubeId: "uSM-Gyulxi0" }
     ],
     en: [
-      { id: "english-introduction-en", title: "Introduction", description: "Meet your coach and learn the approach behind each session.", order: 1, youtubeId: "" },
-      { id: "english-benefits-en", title: "Coaching Benefits", description: "See how focused pronunciation practice improves clarity.", order: 2, youtubeId: "" },
-      { id: "english-features-en", title: "Course Features", description: "Explore session options for different pronunciation goals.", order: 3, youtubeId: "" }
+      { id: "english-introduction-en", title: "Introduction", description: "", order: 1, youtubeId: "uSM-Gyulxi0" }
     ],
     "zh-Hant": [
-      { id: "english-introduction-zh-hant", title: "自我介紹", description: "認識教練及每堂發音課重視的學習方式。", order: 1, youtubeId: "" },
-      { id: "english-benefits-zh-hant", title: "發音教練的優勢", description: "了解如何透過集中練習提升英語清晰度。", order: 2, youtubeId: "" },
-      { id: "english-features-zh-hant", title: "課程特色", description: "依照不同發音目標介紹可選擇的課程方案。", order: 3, youtubeId: "" }
+      { id: "english-introduction-zh-hant", title: "自我介紹", description: "", order: 1, youtubeId: "uSM-Gyulxi0" }
     ]
   }
 };

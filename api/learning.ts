@@ -60,6 +60,11 @@ type PurchaseOfferRecord = {
   };
 };
 
+type PlannedBooking = {
+  start: string;
+  end: string;
+};
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ownerEmail = "yu.leobiz003@outlook.com";
 const adminSessionPrefix = "learning-admin:";
@@ -591,6 +596,180 @@ async function grantPaidPackage(body: Record<string, unknown>, req: ApiRequest, 
   return res.status(200).json({ message: `${quantity}回分のパッケージを付与しました。`, student, lessonPackage: data });
 }
 
+function dateOnly(value: unknown) {
+  const normalized = cleanText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
+function recurringStartTimes(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(cleanText).filter((time) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)))].sort();
+}
+
+function recurringWeekdays(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort();
+}
+
+function buildRecurringBookingPlan(startDate: string, endDate: string, weekdays: number[], startTimes: string[], durationMinutes: number) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const plan: PlannedBooking[] = [];
+
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    if (!weekdays.includes(cursor.getUTCDay())) continue;
+    const day = cursor.toISOString().slice(0, 10);
+    for (const time of startTimes) {
+      const startsAt = new Date(`${day}T${time}:00+09:00`);
+      plan.push({
+        start: startsAt.toISOString(),
+        end: new Date(startsAt.getTime() + durationMinutes * 60_000).toISOString()
+      });
+    }
+  }
+
+  return plan;
+}
+
+async function createRecurringStudentBookings(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const studentId = cleanText(body.studentId).toUpperCase();
+  const email = cleanText(body.email).toLowerCase();
+  const lessonKind = cleanText(body.lessonKind) === "english" ? "english" : "japanese";
+  const lessonMenuId = cleanText(body.lessonMenuId);
+  const note = cleanText(body.note) || "運営管理用予約枠";
+  const startDate = dateOnly(body.startDate);
+  const endDate = dateOnly(body.endDate);
+  const weekdays = recurringWeekdays(body.weekdays);
+  const startTimes = recurringStartTimes(body.startTimes);
+  const durationMinutes = Math.floor(Number(body.durationMinutes));
+
+  if (!/^[A-Z0-9_-]{3,40}$/.test(studentId) || !emailPattern.test(email)) {
+    return res.status(400).json({ message: "Student IDとメールアドレスを確認してください。" });
+  }
+  if (!startDate || !endDate || !lessonMenuId || weekdays.length === 0 || startTimes.length === 0 || ![25, 50, 75].includes(durationMinutes)) {
+    return res.status(400).json({ message: "定期予約の条件を確認してください。" });
+  }
+
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const daySpan = Math.floor((end.getTime() - start.getTime()) / 86_400_000);
+  if (daySpan < 0 || daySpan > 366) {
+    return res.status(400).json({ message: "定期予約の期間は開始日から366日以内で指定してください。" });
+  }
+
+  const plan = buildRecurringBookingPlan(startDate, endDate, weekdays, startTimes, durationMinutes);
+  if (plan.length === 0 || plan.length > 1000) {
+    return res.status(400).json({ message: "作成する予約枠は1件以上1000件以内にしてください。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const { data: student, error: studentError } = await serviceClient
+    .from("students")
+    .select("id,student_id,email")
+    .eq("student_id", studentId)
+    .eq("email", email)
+    .maybeSingle();
+  if (studentError) throw studentError;
+  if (!student) return res.status(404).json({ message: "Student IDとメールアドレスが一致する生徒が見つかりません。" });
+
+  const windowStart = plan[0].start;
+  const windowEnd = plan.reduce((latest, slot) => slot.end > latest ? slot.end : latest, plan[0].end);
+  const [existingBookingsResult, reservationsResult] = await Promise.all([
+    serviceClient
+      .from("bookings")
+      .select("id,requested_slot,status")
+      .eq("student_id", student.id)
+      .neq("status", "cancelled")
+      .gte("requested_slot", windowStart)
+      .lt("requested_slot", windowEnd),
+    serviceClient
+      .from("calendar_reservations")
+      .select("source_type,source_id,starts_at,ends_at,status")
+      .eq("status", "active")
+      .lt("starts_at", windowEnd)
+      .gt("ends_at", windowStart)
+  ]);
+  if (existingBookingsResult.error) throw existingBookingsResult.error;
+  if (reservationsResult.error) throw reservationsResult.error;
+
+  const existingByStart = new Map((existingBookingsResult.data ?? []).map((booking: Record<string, unknown>) => [
+    new Date(String(booking.requested_slot)).toISOString(),
+    String(booking.id)
+  ]));
+  const existingBookingIds = new Set(existingByStart.values());
+  const activeReservations = (reservationsResult.data ?? []).filter((reservation: Record<string, unknown>) => (
+    !existingBookingIds.has(String(reservation.source_id))
+  ));
+  const pendingPlan = plan.filter((slot) => !existingByStart.has(slot.start));
+  const conflicts = pendingPlan.filter((slot) => activeReservations.some((reservation: Record<string, unknown>) => (
+    new Date(String(reservation.starts_at)).getTime() < new Date(slot.end).getTime()
+    && new Date(String(reservation.ends_at)).getTime() > new Date(slot.start).getTime()
+  )));
+
+  if (conflicts.length > 0) {
+    return res.status(409).json({
+      message: `${conflicts.length}件の枠が既存予約と重複しています。登録前に予約カレンダーを確認してください。`,
+      conflicts: conflicts.map((slot) => slot.start)
+    });
+  }
+
+  if (pendingPlan.length === 0) {
+    return res.status(200).json({
+      message: "対象の定期予約はすべて登録済みです。",
+      totalPlanned: plan.length,
+      created: 0,
+      alreadyExisting: plan.length
+    });
+  }
+
+  const { randomUUID } = await import("node:crypto");
+  const requestedAt = new Date().toISOString();
+  const bookingRows = pendingPlan.map((slot) => ({
+    id: randomUUID(),
+    student_id: student.id,
+    lesson_kind: lessonKind,
+    lesson_menu_id: lessonMenuId,
+    requested_at: requestedAt,
+    requested_slot: slot.start,
+    timezone: "Asia/Tokyo",
+    status: "approved",
+    note,
+    created_at: requestedAt,
+    updated_at: requestedAt
+  }));
+  const { error: bookingInsertError } = await serviceClient.from("bookings").insert(bookingRows);
+  if (bookingInsertError) throw bookingInsertError;
+
+  const reservationRows = bookingRows.map((booking, index) => ({
+    source_type: "learning",
+    source_id: booking.id,
+    starts_at: pendingPlan[index].start,
+    ends_at: pendingPlan[index].end,
+    status: "active",
+    owner_student_id: student.id,
+    created_at: requestedAt,
+    updated_at: requestedAt
+  }));
+  const { error: reservationInsertError } = await serviceClient.from("calendar_reservations").insert(reservationRows);
+  if (reservationInsertError) {
+    const { error: rollbackError } = await serviceClient.from("bookings").delete().in("id", bookingRows.map((booking) => booking.id));
+    if (rollbackError) {
+      console.error("Recurring booking rollback failed.", { message: rollbackError.message, bookingCount: bookingRows.length });
+    }
+    throw reservationInsertError;
+  }
+
+  return res.status(200).json({
+    message: `${bookingRows.length}件の定期予約を登録しました。`,
+    totalPlanned: plan.length,
+    created: bookingRows.length,
+    alreadyExisting: plan.length - bookingRows.length,
+    firstSlot: plan[0].start,
+    lastSlot: plan[plan.length - 1].start
+  });
+}
+
 async function saveStudentZoomLink(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const studentId = cleanText(body.studentId).toUpperCase();
@@ -953,6 +1132,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "find-auth-student-by-id") return await findAuthStudentById(body, req, res);
     if (action === "upsert-student") return await upsertStudent(body, req, res);
     if (action === "grant-paid-package") return await grantPaidPackage(body, req, res);
+    if (action === "create-recurring-student-bookings") return await createRecurringStudentBookings(body, req, res);
     if (action === "save-student-zoom-link") return await saveStudentZoomLink(body, req, res);
     if (action === "delete-student") return await deleteStudent(body, req, res);
     if (action === "send-purchase-offer") return await sendPurchaseOffer(body, req, res);

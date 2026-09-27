@@ -117,8 +117,8 @@ async function loadReservations(serviceClient: Awaited<ReturnType<typeof createS
   for (let offset = 0; ; offset += 500) {
     const { data, error } = await serviceClient.from("calendar_reservations")
       .select("starts_at,ends_at,source_type,source_id,status")
-      .eq("status", "active").order("id").range(offset, offset + 499);
-    if (error) throw error;
+      .eq("status", "active").order("starts_at").range(offset, offset + 499);
+    if (error) throw new Error(`Reservation query failed (${error.code || "unknown"}): ${error.message || "unknown"}`);
     rows.push(...(data ?? []) as Reservation[]);
     if (!data || data.length < 500) return rows;
   }

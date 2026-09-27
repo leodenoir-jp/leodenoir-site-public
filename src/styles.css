@@ -782,6 +782,7 @@ textarea {
 .platform-stack {
   display: grid;
   gap: 28px;
+  min-width: 0;
 }
 
 .platform-band {
@@ -847,6 +848,7 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  min-width: 0;
   padding: 24px;
 }
 
@@ -2060,6 +2062,10 @@ textarea {
 .booking-calendar {
   display: grid;
   gap: 12px;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  width: 100%;
 }
 
 .calendar-toolbar {
@@ -2084,6 +2090,8 @@ textarea {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 0;
+  width: 100%;
 }
 
 .calendar-weekdays span {
@@ -2098,6 +2106,7 @@ textarea {
   background: #fbfcfd;
   border: 1px solid var(--soft-line);
   min-height: 104px;
+  min-width: 0;
   padding: 6px;
 }
 
@@ -2125,10 +2134,13 @@ textarea {
   font-weight: 900;
   line-height: 1.25;
   margin: 4px 0;
+  min-width: 0;
   overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 5px;
   text-align: left;
   text-overflow: ellipsis;
+  white-space: normal;
   width: 100%;
 }
 
@@ -2487,6 +2499,61 @@ textarea {
 .calendar-see-more:focus-visible {
   outline: 2px solid var(--navy);
   outline-offset: 2px;
+}
+
+.calendar-overflow-backdrop {
+  align-items: center;
+  background: rgba(11, 22, 42, 0.45);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 20px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 100;
+}
+
+.calendar-overflow-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 50px rgba(11, 22, 42, 0.22);
+  max-height: min(70vh, 520px);
+  max-width: min(420px, 100%);
+  overflow: hidden;
+  padding: 18px;
+  width: 100%;
+}
+
+.calendar-overflow-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calendar-overflow-header button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--navy);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 22px;
+  height: 36px;
+  justify-content: center;
+  line-height: 1;
+  width: 36px;
+}
+
+.calendar-overflow-list {
+  max-height: calc(min(70vh, 520px) - 78px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .calendar-booking.external-busy {

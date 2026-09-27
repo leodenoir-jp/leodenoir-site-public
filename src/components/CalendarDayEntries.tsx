@@ -1,9 +1,9 @@
 import { Children, type ReactNode, useState } from "react";
 
 const copy = {
-  ja: { more: "See more", less: "Close" },
-  en: { more: "See more", less: "Show less" },
-  "zh-Hant": { more: "See more", less: "收合" }
+  ja: { more: "See more", close: "閉じる", title: "予約枠一覧" },
+  en: { more: "See more", close: "Close", title: "Schedule" },
+  "zh-Hant": { more: "See more", close: "關閉", title: "預約時段" }
 } as const;
 
 export function CalendarDayEntries({
@@ -18,7 +18,7 @@ export function CalendarDayEntries({
   const [expanded, setExpanded] = useState(false);
   const entries = Children.toArray(children);
   const hasOverflow = entries.length > visibleCount;
-  const visibleEntries = expanded ? entries : entries.slice(0, visibleCount);
+  const visibleEntries = entries.slice(0, visibleCount);
 
   return (
     <div className="calendar-day-entries">
@@ -28,10 +28,27 @@ export function CalendarDayEntries({
           className="calendar-see-more"
           type="button"
           aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}
+          onClick={() => setExpanded(true)}
         >
-          {expanded ? copy[language].less : `${copy[language].more} (+${entries.length - visibleCount})`}
+          {`${copy[language].more} (+${entries.length - visibleCount})`}
         </button>
+      ) : null}
+      {hasOverflow && expanded ? (
+        <div className="calendar-overflow-backdrop" role="presentation" onClick={() => setExpanded(false)}>
+          <section
+            className="calendar-overflow-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={copy[language].title}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="calendar-overflow-header">
+              <strong>{copy[language].title}</strong>
+              <button type="button" onClick={() => setExpanded(false)} aria-label={copy[language].close}>×</button>
+            </div>
+            <div className="calendar-overflow-list">{entries}</div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

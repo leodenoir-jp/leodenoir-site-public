@@ -2,6 +2,7 @@
 import type { Route } from "../App";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
+import { BusyCalendarSlots, type BusySlot } from "../components/BusyCalendarSlots";
 import { getPaymentPricingBreakdown } from "../config/paymentPricing";
 import { importedLessonReviews } from "../data/lessonReviews";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
@@ -629,6 +630,11 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       return;
     }
 
+    if (scheduleSync !== "synced") {
+      setBookingMessage(language === "ja" ? "予約状況を確認できませんでした。時間をおいて再度お試しください。" : language === "en" ? "We could not verify availability. Please try again shortly." : "無法確認預約狀況，請稍後再試。");
+      return;
+    }
+
     const notificationSent = await sendPlatformNotification({
       name: nameForRequest,
       email: emailForRequest,
@@ -797,6 +803,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               submitChangeRequest={submitChangeRequest}
               bookingMessage={bookingMessage}
               availabilitySlots={bookableAvailabilitySlots}
+              busySlots={sharedReservations.filter((item) => item.status === "active").map((item) => ({ start: item.starts_at, end: item.ends_at }))}
               supabaseAvailable={supabaseAvailable}
               authStatus={authStatus}
               authStatusMessage={authStatusMessage}
@@ -3119,6 +3126,7 @@ function StudentDashboard({
   studentProfiles,
   setStudentProfiles,
   availabilitySlots,
+  busySlots,
   studentEmail,
   setStudentEmail,
   blockedStudents,
@@ -3140,6 +3148,7 @@ function StudentDashboard({
   studentProfiles: StudentProfile[];
   setStudentProfiles: (profiles: StudentProfile[]) => void;
   availabilitySlots: TutorAvailabilitySlot[];
+  busySlots: BusySlot[];
   studentEmail: string;
   setStudentEmail: (email: string) => void;
   blockedStudents: string[];
@@ -3507,6 +3516,7 @@ function StudentDashboard({
           month={availabilityMonth}
           setMonth={setAvailabilityMonth}
           slots={openAvailabilitySlots}
+          busySlots={busySlots}
           selectedSlotIds={bookingForm.requestedSlots.map((slot) => slot.id)}
           onSelectSlot={toggleAvailabilitySlot}
           language={language}
@@ -3695,6 +3705,7 @@ function AvailabilityCalendar({
   month,
   setMonth,
   slots,
+  busySlots = [],
   selectedSlotIds = [],
   onSelectSlot,
   disabledSlotId = "",
@@ -3704,6 +3715,7 @@ function AvailabilityCalendar({
   month: Date;
   setMonth: (month: Date) => void;
   slots: TutorAvailabilitySlot[];
+  busySlots?: BusySlot[];
   selectedSlotIds?: string[];
   onSelectSlot?: (slot: TutorAvailabilitySlot) => void;
   disabledSlotId?: string;
@@ -3740,6 +3752,7 @@ function AvailabilityCalendar({
           return (
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}
+              {date ? <BusyCalendarSlots slots={busySlots} dateKey={dateKey} language={language} /> : null}
               {daySlots.map((slot) => {
                 const selected = selectedSlotIds.includes(slot.id);
                 return (

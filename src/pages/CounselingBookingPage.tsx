@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import type { Route } from "../App";
 import { Seo } from "../components/Seo";
+import { BusyCalendarSlots, type BusySlot } from "../components/BusyCalendarSlots";
 
 type CounselingSlot = {
   id: string;
@@ -198,6 +199,7 @@ function createMockAdminData(): CounselingAdminData {
 
 function CounselingPublicPage({ route }: { route: Route }) {
   const [slots, setSlots] = useState<CounselingSlot[]>([]);
+  const [busySlots, setBusySlots] = useState<BusySlot[]>([]);
   const [guidance, setGuidance] = useState(fallbackPublicGuidance);
   const [selectedSlot, setSelectedSlot] = useState<CounselingSlot | null>(null);
   const [month, setMonth] = useState(() => new Date());
@@ -209,10 +211,11 @@ function CounselingPublicPage({ route }: { route: Route }) {
     setStatus("loading");
     try {
       const response = await fetch("/api/counseling?mode=availability", { headers: { Accept: "application/json" } });
-      const body = await readJsonResponse<{ slots?: CounselingSlot[]; guidance?: string; message?: string }>(response);
+      const body = await readJsonResponse<{ slots?: CounselingSlot[]; busySlots?: BusySlot[]; guidance?: string; message?: string }>(response);
       if (!response.ok) throw new Error(body.message || "空き枠を取得できませんでした。");
       const nextSlots = body.slots ?? [];
       setSlots(nextSlots);
+      setBusySlots(body.busySlots ?? []);
       setGuidance(body.guidance ?? "");
       if (nextSlots[0]) setMonth(new Date(nextSlots[0].start));
       setStatus("idle");
@@ -287,7 +290,7 @@ function CounselingPublicPage({ route }: { route: Route }) {
             <h2>希望日時を選択</h2>
             <p className="platform-muted">表示時刻は日本時間（JST）です。1回50分のセッション後、30分の調整時間を確保します。</p>
             {status === "loading" ? <p>空き枠を読み込んでいます。</p> : null}
-            <CounselingCalendar month={month} setMonth={setMonth} slots={slots} selectedSlot={selectedSlot} onSelect={setSelectedSlot} />
+            <CounselingCalendar month={month} setMonth={setMonth} slots={slots} busySlots={busySlots} selectedSlot={selectedSlot} onSelect={setSelectedSlot} />
             {slots.length === 0 && status !== "loading" ? (
               <p className="platform-note">現在公開中の新規予約枠はありません。リピーターの方はメールでご連絡ください。</p>
             ) : null}
@@ -328,12 +331,14 @@ function CounselingCalendar({
   month,
   setMonth,
   slots,
+  busySlots,
   selectedSlot,
   onSelect
 }: {
   month: Date;
   setMonth: (value: Date) => void;
   slots: CounselingSlot[];
+  busySlots: BusySlot[];
   selectedSlot: CounselingSlot | null;
   onSelect: (value: CounselingSlot) => void;
 }) {
@@ -354,6 +359,7 @@ function CounselingCalendar({
           return (
             <div className="calendar-cell" key={key}>
               <span className="calendar-date">{date.getDate()}</span>
+              <BusyCalendarSlots slots={busySlots} dateKey={key} />
               {daySlots.map((slot) => (
                 <button
                   className={`calendar-booking available${selectedSlot?.id === slot.id ? " selected" : ""}`}

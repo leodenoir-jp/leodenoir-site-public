@@ -2430,6 +2430,16 @@ textarea {
   background: #c08855;
 }
 
+.calendar-booking.external-busy {
+  display: block;
+  background: #e5e7eb;
+  color: #374151;
+  border: 1px solid #cbd0d7;
+  cursor: default;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .calendar-booking.counseling-reserved {
   background: #e9f6f5;
   border-color: #96d6d0;

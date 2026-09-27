@@ -14,7 +14,7 @@ import {
   type CounselingSettings,
   type DateOverride,
   type WeeklyRule
-} from "./_lib/counseling";
+} from "./_lib/counseling.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -113,12 +113,15 @@ async function loadSettings(serviceClient: Awaited<ReturnType<typeof createServi
 }
 
 async function loadReservations(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
-  const { data, error } = await serviceClient
-    .from("calendar_reservations")
-    .select("starts_at,ends_at,source_type,source_id,status")
-    .eq("status", "active");
-  if (error) throw error;
-  return (data ?? []) as Reservation[];
+  const rows: Reservation[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await serviceClient.from("calendar_reservations")
+      .select("starts_at,ends_at,source_type,source_id,status")
+      .eq("status", "active").order("id").range(offset, offset + 499);
+    if (error) throw error;
+    rows.push(...(data ?? []) as Reservation[]);
+    if (!data || data.length < 500) return rows;
+  }
 }
 
 async function buildAvailability(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
@@ -165,7 +168,7 @@ async function findAppointment(serviceClient: Awaited<ReturnType<typeof createSe
 
 async function handlePublicAvailability(res: ApiResponse) {
   const serviceClient = await createServiceClient();
-  const { settings, slots } = await buildAvailability(serviceClient);
+  const { settings, slots, reservations } = await buildAvailability(serviceClient);
   return res.status(200).json({
     guidance: settings.public_guidance,
     timezone: settings.timezone,
@@ -173,7 +176,10 @@ async function handlePublicAvailability(res: ApiResponse) {
     horizonDays: settings.horizon_days,
     sessionMinutes,
     bufferMinutes: reservedMinutes - sessionMinutes,
-    slots
+    slots,
+    busySlots: reservations
+      .filter((item) => new Date(item.ends_at).getTime() > Date.now())
+      .map((item) => ({ start: item.starts_at, end: item.ends_at }))
   });
 }
 
@@ -389,6 +395,7 @@ async function syncLearningReservation(body: Record<string, unknown>, req: ApiRe
     if (!value || typeof value !== "object") continue;
     const item = value as Record<string, unknown>;
     const sourceId = cleanText(item.sourceId);
+    if (sourceId.startsWith("OUTLOOK-AT:")) return res.status(403).json({ message: "External reservations are managed by calendar synchronization." });
     const start = cleanText(item.start);
     const durationMinutes = Math.max(25, Math.min(180, Number(item.durationMinutes ?? 50)));
     if (!sourceId || Number.isNaN(new Date(start).getTime())) continue;
@@ -410,6 +417,7 @@ async function updateLearningReservation(body: Record<string, unknown>, req: Api
   await assertCounselor(getBearerToken(req.headers));
   const serviceClient = await createServiceClient();
   const sourceId = cleanText(body.sourceId);
+  if (sourceId.startsWith("OUTLOOK-AT:")) return res.status(403).json({ message: "External reservations are managed by calendar synchronization." });
   const active = body.active !== false;
   const { error } = await serviceClient.from("calendar_reservations").update({ status: active ? "active" : "cancelled", updated_at: new Date().toISOString() }).eq("source_type", "learning").eq("source_id", sourceId);
   if (error) throw error;

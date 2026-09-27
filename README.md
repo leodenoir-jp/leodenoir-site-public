@@ -201,6 +201,8 @@ Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割�
 
 ## 個別カウンセリング予約
 
+OutlookのAT予約同期の設定・毎週の実行手順は [Outlook AT同期](docs/outlook-at-sync.md) を参照してください。予定名や生徒情報は取り込まず、予約済み時間帯だけを両カレンダーへ反映します。
+
 - 公開予約ページ: `/counseling/booking`
 - カウンセラー専用ページ: `/counseling/admin`
 - API: `/api/counseling`

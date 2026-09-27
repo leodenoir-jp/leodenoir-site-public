@@ -5,7 +5,7 @@ import {
   defaultSettings,
   renderTemplate,
   sendCounselingEmail
-} from "./_lib/counseling";
+} from "./_lib/counseling.js";
 
 declare const process: {
   env: Record<string, string | undefined>;

@@ -108,7 +108,7 @@ function normalizeSettings(record: Record<string, unknown> | null): CounselingSe
 
 async function loadSettings(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
   const { data, error } = await serviceClient.from("counseling_settings").select("*").eq("id", true).maybeSingle();
-  if (error?.code === "42P01") return defaultSettings();
+  if (error?.code === "42P01" || error?.code === "PGRST205") return defaultSettings();
   if (error) throw new Error(`Counseling settings query failed (${error.code || "unknown"}): ${error.message || "unknown"}`);
   return normalizeSettings(data as Record<string, unknown> | null);
 }

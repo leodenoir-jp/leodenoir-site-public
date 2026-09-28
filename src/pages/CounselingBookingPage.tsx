@@ -431,7 +431,7 @@ function CounselorAdminPage() {
       fetch("/api/counseling?mode=occupancy", { headers: { Accept: "application/json" } })
     ]);
     if (!response.ok) throw new Error(response.status === 401 ? "このアカウントでは管理画面を利用できません。" : "管理データを取得できませんでした。");
-    const body = await readJsonResponse<{ settings: CounselingSettings; appointments: CounselingAppointment[] }>(response);
+    const body = await readJsonResponse<{ settings: CounselingSettings; appointments: CounselingAppointment[]; appointmentsReady?: boolean }>(response);
     const availabilityBody = availabilityResponse.ok ? await readJsonResponse<{ slots?: CounselingSlot[] }>(availabilityResponse) : { slots: [] };
     const occupancyBody = occupancyResponse.ok ? await readJsonResponse<{ reservations?: CalendarReservation[] }>(occupancyResponse) : { reservations: [] };
     setAdminData({
@@ -440,6 +440,9 @@ function CounselorAdminPage() {
       slots: availabilityBody.slots ?? [],
       reservations: occupancyBody.reservations ?? []
     });
+    if (body.appointmentsReady === false) {
+      setMessage("予約一覧のデータベース初期設定が未完了です。スケジュール設定と案内文は確認できます。");
+    }
   };
 
   useEffect(() => {

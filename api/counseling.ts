@@ -198,11 +198,17 @@ async function handleAdmin(req: ApiRequest, res: ApiResponse) {
     serviceClient.from("counseling_appointments").select("*, counseling_clients(*)").order("starts_at", { ascending: true })
   ]);
   if (appointmentsResult.error) {
+    if (["42P01", "PGRST205"].includes(appointmentsResult.error.code || "")) {
+      console.warn("Counseling appointments table is not ready; returning an empty admin list.", {
+        code: appointmentsResult.error.code
+      });
+      return res.status(200).json({ settings, appointments: [], appointmentsReady: false });
+    }
     throw new Error(
       `Counseling appointments query failed (${appointmentsResult.error.code || "unknown"}): ${appointmentsResult.error.message || "unknown"}`
     );
   }
-  return res.status(200).json({ settings, appointments: appointmentsResult.data ?? [] });
+  return res.status(200).json({ settings, appointments: appointmentsResult.data ?? [], appointmentsReady: true });
 }
 
 async function loginCounselor(body: Record<string, unknown>, res: ApiResponse) {

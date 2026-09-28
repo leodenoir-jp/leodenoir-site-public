@@ -528,23 +528,25 @@ function CounselorAdminPage() {
     }
   };
 
+  const persistSettings = (nextSettings: CounselingSettings, successMessage: string) => adminAction({
+    action: "save-settings",
+    leadHours: nextSettings.lead_hours,
+    horizonDays: nextSettings.horizon_days,
+    dailyLimit: nextSettings.daily_limit,
+    weeklyRules: nextSettings.weekly_rules,
+    dateOverrides: nextSettings.date_overrides,
+    publicGuidance: nextSettings.public_guidance,
+    provisionalTemplate: nextSettings.provisional_template,
+    paymentTemplate: nextSettings.payment_template,
+    confirmationTemplate: nextSettings.confirmation_template,
+    reminderTemplate: nextSettings.reminder_template,
+    cancellationTemplate: nextSettings.cancellation_template
+  }, successMessage);
+
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!settings) return;
-    await adminAction({
-      action: "save-settings",
-      leadHours: settings.lead_hours,
-      horizonDays: settings.horizon_days,
-      dailyLimit: settings.daily_limit,
-      weeklyRules: settings.weekly_rules,
-      dateOverrides: settings.date_overrides,
-      publicGuidance: settings.public_guidance,
-      provisionalTemplate: settings.provisional_template,
-      paymentTemplate: settings.payment_template,
-      confirmationTemplate: settings.confirmation_template,
-      reminderTemplate: settings.reminder_template,
-      cancellationTemplate: settings.cancellation_template
-    }, "予約設定と案内文を保存しました。");
+    await persistSettings(settings, "予約設定と案内文を保存しました。");
   };
 
   if (loading) return <section className="section"><div className="container"><p>管理画面を確認しています。</p></div></section>;
@@ -580,12 +582,30 @@ function CounselorAdminPage() {
     ...settings,
     weekly_rules: { ...settings.weekly_rules, [String(day)]: { ...settings.weekly_rules[String(day)], ...next } }
   });
-  const addOverride = () => {
-    if (!overrideDraft.date) return;
+  const addOverride = async () => {
+    if (!overrideDraft.date) {
+      setMessage("例外日の日付を選択してください。");
+      return;
+    }
     const existing = settings.date_overrides.find((item) => item.date === overrideDraft.date);
     const nextOverride = { ...overrideDraft, excluded_times: existing?.excluded_times ?? [] };
-    setSettings({ ...settings, date_overrides: [...settings.date_overrides.filter((item) => item.date !== overrideDraft.date), nextOverride].sort((a, b) => a.date.localeCompare(b.date)) });
-    setOverrideDraft({ ...overrideDraft, date: "" });
+    const nextSettings = {
+      ...settings,
+      date_overrides: [...settings.date_overrides.filter((item) => item.date !== overrideDraft.date), nextOverride].sort((a, b) => a.date.localeCompare(b.date))
+    };
+    const saved = await persistSettings(nextSettings, `${overrideDraft.date}の例外設定を保存しました。`);
+    if (saved) {
+      const [year, month] = overrideDraft.date.split("-").map(Number);
+      setAdminCalendarMonth(new Date(year, month - 1, 1));
+      setOverrideDraft({ ...overrideDraft, date: "" });
+    }
+  };
+  const removeOverride = async (date: string) => {
+    const nextSettings = {
+      ...settings,
+      date_overrides: settings.date_overrides.filter((item) => item.date !== date)
+    };
+    await persistSettings(nextSettings, `${date}の例外設定を削除しました。`);
   };
   const deleteAvailabilitySlot = async (slot: CounselingSlot) => {
     await adminAction({ action: "delete-availability", start: slot.start }, "空き枠を削除しました。");
@@ -686,9 +706,9 @@ function CounselorAdminPage() {
               <label>開始<input type="time" step="1800" value={overrideDraft.start} onChange={(event) => setOverrideDraft({ ...overrideDraft, start: event.target.value })} disabled={!overrideDraft.enabled} /></label>
               <label>終了<input type="time" step="1800" value={overrideDraft.end} onChange={(event) => setOverrideDraft({ ...overrideDraft, end: event.target.value })} disabled={!overrideDraft.enabled} /></label>
             </div>
-            <button className="button secondary" type="button" onClick={addOverride}>例外日を追加</button>
+            <button className="button secondary" type="button" onClick={() => void addOverride()}>例外日を保存</button>
             <div className="counseling-override-list">
-              {settings.date_overrides.map((override) => <span key={override.date}>{override.date} / {override.enabled ? `${override.start}〜${override.end}` : "受付停止"}{override.excluded_times?.length ? ` / 除外${override.excluded_times.length}枠` : ""}<button type="button" aria-label={`${override.date}を削除`} onClick={() => setSettings({ ...settings, date_overrides: settings.date_overrides.filter((item) => item.date !== override.date) })}>×</button></span>)}
+              {settings.date_overrides.map((override) => <span key={override.date}>{override.date} / {override.enabled ? `${override.start}〜${override.end}` : "受付停止"}{override.excluded_times?.length ? ` / 除外${override.excluded_times.length}枠` : ""}<button type="button" aria-label={`${override.date}を削除`} onClick={() => void removeOverride(override.date)}>×</button></span>)}
             </div>
             <button className="button primary" type="submit">スケジュール設定を保存</button>
             <div className="counseling-schedule-calendar">

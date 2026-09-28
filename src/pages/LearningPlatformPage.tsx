@@ -2038,7 +2038,10 @@ function TutorAvailabilityPage({
   const pendingReviews = reviews.filter((review) => review.status === "pending");
   const pendingBookings = bookings.filter((booking) => booking.status === "requested");
   const completedBookingsWithoutNotes = bookings.filter((booking) => (
-    booking.status === "approved" && isPastBooking(booking.requestedSlot) && !booking.lessonNoteSent
+    booking.status === "approved"
+    && isPastBooking(booking.requestedSlot)
+    && !isLessonNoteAutoCompleted(booking.requestedSlot)
+    && !booking.lessonNoteSent
   ));
   const adminStudentProfiles: StudentProfile[] = adminStudents.map((student) => ({
     studentId: student.student_id,
@@ -2611,7 +2614,7 @@ function TutorAvailabilityPage({
 
       <section className="platform-card platform-form">
         <h3>レッスンノート未送信</h3>
-        <p className="platform-muted">完了済みレッスンのうち、レッスンノート送信が未完了のものを表示します。記載後に完了を押すと、生徒宛にメール送信されます。</p>
+        <p className="platform-muted">完了済みレッスンのうち、レッスンノート送信が未完了のものを表示します。記載後に完了を押すと、生徒宛にメール送信されます。授業実施から3日を経過したものは自動的に完了扱いになります。</p>
         <div className="record-list">
           {completedBookingsWithoutNotes.length > 0 ? completedBookingsWithoutNotes.map((booking) => (
             <article key={booking.id} className="lesson-note-record">
@@ -5035,5 +5038,11 @@ function isPastBooking(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return false;
   return date.getTime() < Date.now();
+}
+
+function isLessonNoteAutoCompleted(value: string) {
+  const lessonDate = new Date(value);
+  if (Number.isNaN(lessonDate.getTime())) return false;
+  return Date.now() >= lessonDate.getTime() + 3 * 24 * 60 * 60 * 1000;
 }
 

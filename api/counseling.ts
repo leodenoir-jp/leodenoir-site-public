@@ -197,7 +197,11 @@ async function handleAdmin(req: ApiRequest, res: ApiResponse) {
     loadSettings(serviceClient),
     serviceClient.from("counseling_appointments").select("*, counseling_clients(*)").order("starts_at", { ascending: true })
   ]);
-  if (appointmentsResult.error) throw appointmentsResult.error;
+  if (appointmentsResult.error) {
+    throw new Error(
+      `Counseling appointments query failed (${appointmentsResult.error.code || "unknown"}): ${appointmentsResult.error.message || "unknown"}`
+    );
+  }
   return res.status(200).json({ settings, appointments: appointmentsResult.data ?? [] });
 }
 

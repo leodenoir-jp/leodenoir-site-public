@@ -178,9 +178,9 @@ function createMockAdminData(): CounselingAdminData {
         { date: toLocalDateKey(confirmedDate), enabled: false, start: "10:00", end: "18:00" }
       ],
       public_guidance: fallbackPublicGuidance,
-      provisional_template: "{{name}} 様\n\n個別カウンセリングの日程を仮確定しました。\n予約ID：{{bookingId}}\n日時：{{dateTime}}\n\nお支払い方法とZoomリンクは確認後にメールでご案内します。",
-      payment_template: "{{name}} 様\n\n個別カウンセリングのお支払い方法とZoomリンクをご案内します。\n決済方法：{{paymentMethod}}\n決済リンク：{{paymentLink}}\nZoomリンク：{{zoomLink}}",
-      confirmation_template: "{{name}} 様\n\nご入金を確認し、個別カウンセリングの予約が確定しました。\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nZoomリンク：{{zoomLink}}",
+      provisional_template: "{{name}} 様\n\n個別カウンセリングへお申し込みいただき、ありがとうございます。\n次の日程を仮確定として承りました。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\n所要時間：50分\n料金：9,000円\n\n内容を確認後、PayPalまたはPayPayの決済方法をメールにてご案内します。\n決済確認後に、Zoomリンクをお送りします。\n\n【キャンセルについて】\n・決済完了後、または開始12時間前を過ぎてからの相談者さま都合によるキャンセルは返金対象外です。\n・開始12時間前までのキャンセルは返金可能です。\n・返金時は、振込先情報または支払いコードをこのメールへの返信でお知らせください。\n\n当日は、顔出し・声出しともに任意です。声出しが難しい場合はZoomチャットもご利用いただけます。",
+      payment_template: "{{name}} 様\n\n個別カウンセリングのお支払い方法をご案内します。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nお支払い方法：{{paymentMethod}}\n決済リンク：{{paymentLink}}\n\n決済完了を確認後、予約確定メールにて、Zoomリンクをお送りします。",
+      confirmation_template: "{{name}} 様\n\nご入金を確認しました。個別カウンセリングの予約が確定しました。\n以下の通り、当日のZoomリンクをお知らせします。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nZoomリンク：{{zoomLink}}\n\n開始時間になりましたら、上記リンクからご参加ください。",
       reminder_template: "{{name}} 様\n\n個別カウンセリング開始18時間前のリマインドです。\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nZoomリンク：{{zoomLink}}",
       cancellation_template: "{{name}} 様\n\nカウンセラー都合により、以下の予約をキャンセルさせていただきました。\n予約ID：{{bookingId}}\n日時：{{dateTime}}\n理由：{{cancellationReason}}"
     },
@@ -505,20 +505,26 @@ function CounselorAdminPage() {
       setMessage(`モック表示中です。実際の保存・送信は行わず、操作だけ確認しています。`);
       return true;
     }
-    setMessage("処理中...");
-    const response = await fetch("/api/counseling", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify(payload)
-    });
-    const body = await readJsonResponse<{ message?: string }>(response);
-    if (!response.ok) {
-      setMessage(body.message || "処理できませんでした。");
+    try {
+      setMessage("処理中...");
+      const response = await fetch("/api/counseling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify(payload)
+      });
+      const body = await readJsonResponse<{ message?: string }>(response);
+      if (!response.ok) {
+        setMessage(body.message || "処理できませんでした。");
+        return false;
+      }
+      setMessage(successMessage);
+      await loadAdmin(sessionToken);
+      setMessage(successMessage);
+      return true;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "処理できませんでした。");
       return false;
     }
-    setMessage(successMessage);
-    await loadAdmin(sessionToken);
-    return true;
   };
 
   const saveSettings = async (event: FormEvent<HTMLFormElement>) => {
@@ -631,7 +637,7 @@ function CounselorAdminPage() {
                     </div>
                     <div className="button-row compact">
                       <button className="button secondary" type="button" onClick={() => void adminAction({ action: "save-details", appointmentId: appointment.id, ...draft }, "Zoomリンクと決済情報を保存しました。")}>情報を保存</button>
-                      <button className="button secondary" type="button" onClick={() => void adminAction({ action: "send-payment", appointmentId: appointment.id }, "決済方法とZoomリンクを送信しました。")}>決済案内を送信</button>
+                      <button className="button secondary" type="button" onClick={() => void adminAction({ action: "send-payment", appointmentId: appointment.id }, "決済方法を送信しました。")}>決済案内を送信</button>
                       <button className="button primary" type="button" onClick={() => void adminAction({ action: "mark-paid", appointmentId: appointment.id }, "予約を確定し、クライエントへ通知しました。")}>決済完了</button>
                     </div>
                     <div className="counseling-cancel-control">
@@ -685,10 +691,10 @@ function CounselorAdminPage() {
           {activeAdminTab === "guidance" ? (
           <form className="platform-card platform-form" onSubmit={saveSettings}>
             <h2>公開案内文・自動送信文</h2>
-            <p className="platform-note">テンプレートでは {"{{name}}、{{bookingId}}、{{dateTime}}、{{paymentMethod}}、{{paymentLink}}、{{zoomLink}}、{{cancellationReason}}"} を使用できます。</p>
+            <p className="platform-note">テンプレートでは {"{{name}}、{{bookingId}}、{{dateTime}}、{{paymentMethod}}、{{paymentLink}}、{{zoomLink}}、{{cancellationReason}}"} を使用できます。Zoomリンクは「予約確定メール」でのみクライエントへ案内します。</p>
             <TemplateEditor label="予約ページ案内文" value={settings.public_guidance} onChange={(value) => setSettings({ ...settings, public_guidance: value })} />
             <TemplateEditor label="日程仮確定メール" value={settings.provisional_template} onChange={(value) => setSettings({ ...settings, provisional_template: value })} />
-            <TemplateEditor label="決済方法・Zoomリンク案内メール" value={settings.payment_template} onChange={(value) => setSettings({ ...settings, payment_template: value })} />
+            <TemplateEditor label="決済方法案内メール" value={settings.payment_template} onChange={(value) => setSettings({ ...settings, payment_template: value })} />
             <TemplateEditor label="予約確定メール" value={settings.confirmation_template} onChange={(value) => setSettings({ ...settings, confirmation_template: value })} />
             <TemplateEditor label="18時間前リマインドメール" value={settings.reminder_template} onChange={(value) => setSettings({ ...settings, reminder_template: value })} />
             <TemplateEditor label="カウンセラー都合キャンセルメール" value={settings.cancellation_template} onChange={(value) => setSettings({ ...settings, cancellation_template: value })} />

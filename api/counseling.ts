@@ -317,7 +317,10 @@ async function saveSettings(body: Record<string, unknown>, req: ApiRequest, res:
     updated_at: new Date().toISOString()
   };
   const { error } = await serviceClient.from("counseling_settings").upsert(payload, { onConflict: "id" });
-  if (error) throw error;
+  if (error?.code === "42P01" || error?.code === "PGRST205") {
+    return res.status(503).json({ message: "案内文の保存先が未設定です。Supabaseのカウンセリング設定を初期化してください。" });
+  }
+  if (error) throw new Error(`Counseling settings save failed (${error.code || "unknown"}): ${error.message || "unknown"}`);
   return res.status(200).json({ message: "保存しました。" });
 }
 
@@ -346,12 +349,12 @@ async function sendPaymentGuide(body: Record<string, unknown>, req: ApiRequest, 
   const serviceClient = await createServiceClient();
   const appointment = await findAppointment(serviceClient, cleanText(body.appointmentId));
   const client = appointment.counseling_clients;
-  if (!appointment.payment_method || !appointment.payment_link || !client.zoom_link) {
-    return res.status(400).json({ message: "先にZoomリンクと決済情報を登録してください。" });
+  if (!appointment.payment_method || !appointment.payment_link) {
+    return res.status(400).json({ message: "先に決済情報を登録してください。" });
   }
   const settings = await loadSettings(serviceClient);
   const text = renderTemplate(settings.payment_template, appointmentTemplateValues(appointment, client));
-  await sendCounselingEmail({ to: String(client.email), replyTo: counselorEmail, subject: "個別カウンセリングのお支払い方法とZoomリンク", text, idempotencyKey: `counseling-payment-${appointment.booking_id}` });
+  await sendCounselingEmail({ to: String(client.email), replyTo: counselorEmail, subject: "個別カウンセリングのお支払い方法", text, idempotencyKey: `counseling-payment-${appointment.booking_id}` });
   await serviceClient.from("counseling_appointments").update({ payment_sent_at: new Date().toISOString() }).eq("id", appointment.id);
   return res.status(200).json({ message: "決済案内を送信しました。" });
 }

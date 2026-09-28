@@ -14,6 +14,7 @@ export type WeeklyRule = {
 
 export type DateOverride = WeeklyRule & {
   date: string;
+  excluded_times?: string[];
 };
 
 export type CounselingSettings = {

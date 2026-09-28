@@ -19,6 +19,7 @@ type WeeklyRule = {
 
 type DateOverride = WeeklyRule & {
   date: string;
+  excluded_times?: string[];
 };
 
 type CounselingSettings = {
@@ -581,8 +582,14 @@ function CounselorAdminPage() {
   });
   const addOverride = () => {
     if (!overrideDraft.date) return;
-    setSettings({ ...settings, date_overrides: [...settings.date_overrides.filter((item) => item.date !== overrideDraft.date), overrideDraft].sort((a, b) => a.date.localeCompare(b.date)) });
+    const existing = settings.date_overrides.find((item) => item.date === overrideDraft.date);
+    const nextOverride = { ...overrideDraft, excluded_times: existing?.excluded_times ?? [] };
+    setSettings({ ...settings, date_overrides: [...settings.date_overrides.filter((item) => item.date !== overrideDraft.date), nextOverride].sort((a, b) => a.date.localeCompare(b.date)) });
     setOverrideDraft({ ...overrideDraft, date: "" });
+  };
+  const deleteAvailabilitySlot = async (slot: CounselingSlot) => {
+    if (!window.confirm(`${formatDateTime(slot.start)}の空き枠を削除しますか？`)) return;
+    await adminAction({ action: "delete-availability", start: slot.start }, "空き枠を削除しました。");
   };
 
   return (
@@ -682,9 +689,21 @@ function CounselorAdminPage() {
             </div>
             <button className="button secondary" type="button" onClick={addOverride}>例外日を追加</button>
             <div className="counseling-override-list">
-              {settings.date_overrides.map((override) => <span key={override.date}>{override.date} / {override.enabled ? `${override.start}〜${override.end}` : "受付停止"}<button type="button" aria-label={`${override.date}を削除`} onClick={() => setSettings({ ...settings, date_overrides: settings.date_overrides.filter((item) => item.date !== override.date) })}>×</button></span>)}
+              {settings.date_overrides.map((override) => <span key={override.date}>{override.date} / {override.enabled ? `${override.start}〜${override.end}` : "受付停止"}{override.excluded_times?.length ? ` / 除外${override.excluded_times.length}枠` : ""}<button type="button" aria-label={`${override.date}を削除`} onClick={() => setSettings({ ...settings, date_overrides: settings.date_overrides.filter((item) => item.date !== override.date) })}>×</button></span>)}
             </div>
             <button className="button primary" type="submit">スケジュール設定を保存</button>
+            <div className="counseling-schedule-calendar">
+              <h3>登録済みの空き枠</h3>
+              <p className="platform-note">削除したい空き枠をクリックしてください。予約済みの枠はここから削除できません。</p>
+              <CounselingAdminCalendar
+                appointments={appointments}
+                month={adminCalendarMonth}
+                onDeleteSlot={deleteAvailabilitySlot}
+                reservations={reservations}
+                setMonth={setAdminCalendarMonth}
+                slots={adminSlots}
+              />
+            </div>
           </form>
           ) : null}
 
@@ -712,10 +731,12 @@ function CounselingAdminCalendar({
   month,
   reservations,
   setMonth,
-  slots
+  slots,
+  onDeleteSlot
 }: {
   appointments: CounselingAppointment[];
   month: Date;
+  onDeleteSlot?: (slot: CounselingSlot) => void;
   reservations: CalendarReservation[];
   setMonth: (value: Date) => void;
   slots: CounselingSlot[];
@@ -746,7 +767,11 @@ function CounselingAdminCalendar({
           return (
             <div className="calendar-cell" key={key}>
               <span className="calendar-date">{date.getDate()}</span>
-              {daySlots.map((slot) => (
+              {daySlots.map((slot) => onDeleteSlot ? (
+                <button className="calendar-booking available counseling-slot-delete" key={`slot-${slot.id}`} type="button" onClick={() => onDeleteSlot(slot)} aria-label={`${formatTime(slot.start)}から${formatTime(slot.end)}の空き枠を削除`} title="クリックして空き枠を削除">
+                  {formatTime(slot.start)}-{formatTime(slot.end)}
+                </button>
+              ) : (
                 <span className="calendar-booking available" key={`slot-${slot.id}`} aria-label={`空き枠 ${formatTime(slot.start)}から${formatTime(slot.end)}`} title="空き枠">
                   {formatTime(slot.start)}-{formatTime(slot.end)}
                 </span>

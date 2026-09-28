@@ -76,6 +76,22 @@ function dateFromKey(dateKey: string) {
   return new Date(`${dateKey}T00:00:00+09:00`);
 }
 
+function weekdayFromDateKey(dateKey: string) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
+}
+
+function timeInJst(value: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(value);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
+  return `${part("hour")}:${part("minute")}`;
+}
+
 function addDaysToKey(dateKey: string, days: number) {
   const date = dateFromKey(dateKey);
   date.setUTCDate(date.getUTCDate() + days);
@@ -141,13 +157,15 @@ async function buildAvailability(serviceClient: Awaited<ReturnType<typeof create
     const date = addDaysToKey(today, offset);
     if ((activeCounselingCounts.get(date) ?? 0) >= settings.daily_limit) continue;
     const override = settings.date_overrides.find((item) => item.date === date);
-    const weekday = dateFromKey(date).getDay();
+    const weekday = weekdayFromDateKey(date);
     const rule = override ?? settings.weekly_rules[String(weekday)];
     if (!rule?.enabled) continue;
     const startMinutes = toMinutes(rule.start);
     const endMinutes = toMinutes(rule.end);
     for (let minute = startMinutes; minute + reservedMinutes <= endMinutes; minute += 30) {
-      const start = new Date(`${date}T${minutesToTime(minute)}:00+09:00`).toISOString();
+      const localTime = minutesToTime(minute);
+      if (override?.excluded_times?.includes(localTime)) continue;
+      const start = new Date(`${date}T${localTime}:00+09:00`).toISOString();
       const end = addMinutes(start, reservedMinutes);
       if (new Date(start).getTime() < earliest) continue;
       if (reservations.some((reservation) => overlaps(start, end, reservation))) continue;
@@ -155,6 +173,43 @@ async function buildAvailability(serviceClient: Awaited<ReturnType<typeof create
     }
   }
   return { settings, slots, reservations };
+}
+
+async function deleteAvailabilitySlot(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertCounselor(getBearerToken(req.headers));
+  const start = cleanText(body.start);
+  const parsedStart = new Date(start);
+  if (!start || Number.isNaN(parsedStart.getTime())) {
+    return res.status(400).json({ message: "削除する空き枠を確認できませんでした。" });
+  }
+
+  const serviceClient = await createServiceClient();
+  const settings = await loadSettings(serviceClient);
+  const date = dateKeyInJst(parsedStart);
+  const time = timeInJst(parsedStart);
+  const currentOverride = settings.date_overrides.find((item) => item.date === date);
+  const effectiveRule = currentOverride ?? settings.weekly_rules[String(weekdayFromDateKey(date))];
+  if (!effectiveRule?.enabled) {
+    return res.status(404).json({ message: "空き枠が見つかりません。画面を更新して再度お試しください。" });
+  }
+
+  const nextOverride: DateOverride = {
+    date,
+    enabled: effectiveRule.enabled,
+    start: effectiveRule.start,
+    end: effectiveRule.end,
+    excluded_times: Array.from(new Set([...(currentOverride?.excluded_times ?? []), time])).sort()
+  };
+  const dateOverrides = [
+    ...settings.date_overrides.filter((item) => item.date !== date),
+    nextOverride
+  ].sort((a, b) => a.date.localeCompare(b.date));
+  const { error } = await serviceClient.from("counseling_settings").update({
+    date_overrides: dateOverrides,
+    updated_at: new Date().toISOString()
+  }).eq("id", true);
+  if (error) throw new Error(`Counseling availability deletion failed (${error.code || "unknown"}): ${error.message || "unknown"}`);
+  return res.status(200).json({ message: `${date} ${time}の空き枠を削除しました。` });
 }
 
 async function findAppointment(serviceClient: Awaited<ReturnType<typeof createServiceClient>>, appointmentId: string) {
@@ -457,6 +512,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "admin-login") return await loginCounselor(body, res);
     if (action === "request") return await createAppointment(body, res);
     if (action === "save-settings") return await saveSettings(body, req, res);
+    if (action === "delete-availability") return await deleteAvailabilitySlot(body, req, res);
     if (action === "save-details") return await saveAppointmentDetails(body, req, res);
     if (action === "send-payment") return await sendPaymentGuide(body, req, res);
     if (action === "mark-paid") return await markPaid(body, req, res);

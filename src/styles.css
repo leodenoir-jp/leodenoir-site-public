@@ -2408,6 +2408,19 @@ textarea {
   margin-top: 16px;
 }
 
+.counseling-schedule-calendar {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 14px;
+}
+
+.counseling-slot-delete:hover,
+.counseling-slot-delete:focus-visible {
+  background: #f3e7e7;
+  border-color: #d7b4b4;
+  border-left-color: #8c4a4a;
+}
+
 .counseling-calendar-legend {
   display: flex;
   flex-wrap: wrap;

@@ -588,7 +588,6 @@ function CounselorAdminPage() {
     setOverrideDraft({ ...overrideDraft, date: "" });
   };
   const deleteAvailabilitySlot = async (slot: CounselingSlot) => {
-    if (!window.confirm(`${formatDateTime(slot.start)}の空き枠を削除しますか？`)) return;
     await adminAction({ action: "delete-availability", start: slot.start }, "空き枠を削除しました。");
   };
 

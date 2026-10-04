@@ -760,6 +760,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
               setStudentEmail={setStudentEmail}
               availabilitySlots={availabilitySlots}
               setAvailabilitySlots={setAvailabilitySlots}
+              sharedReservations={sharedReservations}
               reviews={reviews}
               setReviews={setReviews}
             />
@@ -1947,6 +1948,7 @@ function TutorAvailabilityPage({
   setStudentEmail,
   availabilitySlots,
   setAvailabilitySlots,
+  sharedReservations,
   reviews,
   setReviews
 }: {
@@ -1960,6 +1962,7 @@ function TutorAvailabilityPage({
   setStudentEmail: (email: string) => void;
   availabilitySlots: TutorAvailabilitySlot[];
   setAvailabilitySlots: (slots: TutorAvailabilitySlot[] | ((current: TutorAvailabilitySlot[]) => TutorAvailabilitySlot[])) => void;
+  sharedReservations: SharedScheduleReservation[];
   reviews: LessonReview[];
   setReviews: (reviews: LessonReview[]) => void;
 }) {
@@ -1974,6 +1977,12 @@ function TutorAvailabilityPage({
   const [purchaseOffers, setPurchaseOffers] = useState<LearningPurchaseOffer[]>([]);
   const [adminStudents, setAdminStudents] = useState<LearningAdminStudent[]>([]);
   const [purchaseOffersReady, setPurchaseOffersReady] = useState(true);
+  const sharedBusySlots = sharedReservations
+    .filter((item) => item.status === "active")
+    .map((item) => ({ start: item.starts_at, end: item.ends_at }));
+  const outlookBusySlots = sharedReservations
+    .filter((item) => item.status === "active" && item.source_id.startsWith("OUTLOOK-AT:"))
+    .map((item) => ({ start: item.starts_at, end: item.ends_at }));
   const [calendarMonth, setCalendarMonth] = useState(getCurrentCalendarMonth);
   const [bookingCalendarMonth, setBookingCalendarMonth] = useState(getCurrentCalendarMonth);
   const [selectedTutorBooking, setSelectedTutorBooking] = useState<BookingRecord | null>(null);
@@ -2607,6 +2616,7 @@ function TutorAvailabilityPage({
           month={bookingCalendarMonth}
           setMonth={setBookingCalendarMonth}
           bookings={bookings.filter((booking) => booking.status !== "cancelled")}
+          busySlots={outlookBusySlots}
           onSelectBooking={setSelectedTutorBooking}
           language="ja"
         />
@@ -2859,6 +2869,7 @@ function TutorAvailabilityPage({
           month={calendarMonth}
           setMonth={setCalendarMonth}
           slots={availabilitySlots}
+          busySlots={sharedBusySlots}
           onSelectSlot={(slot) => void removeAvailabilitySlot(slot.id)}
           disabledSlotId={deletingAvailabilityId}
           slotActionLabel="空き枠を削除"
@@ -3617,12 +3628,14 @@ function BookingCalendar({
   month,
   setMonth,
   bookings,
+  busySlots = [],
   onSelectBooking,
   language = "ja"
 }: {
   month: Date;
   setMonth: (month: Date) => void;
   bookings: BookingRecord[];
+  busySlots?: BusySlot[];
   onSelectBooking: (booking: BookingRecord) => void;
   language?: PlatformLanguage;
 }) {
@@ -3655,16 +3668,28 @@ function BookingCalendar({
           const dayBookings = date ? bookings
             .filter((booking) => toDateKey(new Date(booking.requestedSlot)) === dateKey)
             .sort((a, b) => new Date(a.requestedSlot).getTime() - new Date(b.requestedSlot).getTime()) : [];
+          const dayEntries = date ? [
+            ...getBusySlotsForDate(busySlots, dateKey).map((range) => ({
+              key: `busy-${range.key}`,
+              start: range.start,
+              node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} language={language} />
+            })),
+            ...dayBookings.map((booking) => ({
+              key: booking.id,
+              start: Date.parse(booking.requestedSlot),
+              node: (
+                <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
+                  {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
+                </button>
+              )
+            }))
+          ].sort((a, b) => a.start - b.start) : [];
           return (
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}
               {date ? (
                 <CalendarDayEntries language={language}>
-                  {dayBookings.map((booking) => (
-                    <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
-                      {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
-                    </button>
-                  ))}
+                  {dayEntries.map((entry) => entry.node)}
                 </CalendarDayEntries>
               ) : null}
             </div>

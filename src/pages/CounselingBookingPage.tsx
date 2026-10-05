@@ -363,11 +363,13 @@ function CounselingCalendar({
             ...getBusySlotsForDate(busySlots, key).map((range) => ({
               key: `busy-${range.key}`,
               start: range.start,
+              isAvailable: false,
               node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} />
             })),
             ...daySlots.map((slot) => ({
               key: slot.id,
               start: Date.parse(slot.start),
+              isAvailable: true,
               node: (
                 <button
                   className={`calendar-booking available${selectedSlot?.id === slot.id ? " selected" : ""}`}
@@ -379,7 +381,7 @@ function CounselingCalendar({
                 </button>
               )
             }))
-          ].sort((a, b) => a.start - b.start);
+          ].sort((a, b) => Number(b.isAvailable) - Number(a.isAvailable) || a.start - b.start);
           return (
             <div className="calendar-cell" key={key}>
               <span className="calendar-date">{date.getDate()}</span>

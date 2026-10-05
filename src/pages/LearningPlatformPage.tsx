@@ -3672,18 +3672,20 @@ function BookingCalendar({
             ...getBusySlotsForDate(busySlots, dateKey).map((range) => ({
               key: `busy-${range.key}`,
               start: range.start,
+              isAvailable: false,
               node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} language={language} />
             })),
             ...dayBookings.map((booking) => ({
               key: booking.id,
               start: Date.parse(booking.requestedSlot),
+              isAvailable: false,
               node: (
                 <button key={booking.id} className={`calendar-booking ${booking.status} ${getBookingVisualState(booking)}`} type="button" onClick={() => onSelectBooking(booking)}>
                   {formatTime(booking.requestedSlot)} {booking.lessonKind === "japanese" ? "JP" : "EN"}
                 </button>
               )
             }))
-          ].sort((a, b) => a.start - b.start) : [];
+          ].sort((a, b) => Number(b.isAvailable) - Number(a.isAvailable) || a.start - b.start) : [];
           return (
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}
@@ -3776,6 +3778,7 @@ function AvailabilityCalendar({
             ...getBusySlotsForDate(busySlots, dateKey).map((range) => ({
               key: `busy-${range.key}`,
               start: range.start,
+              isAvailable: false,
               node: <BusyCalendarSlot key={`busy-${range.key}`} range={range} language={language} />
             })),
             ...daySlots.map((slot) => {
@@ -3783,6 +3786,7 @@ function AvailabilityCalendar({
               return {
                 key: slot.id,
                 start: Date.parse(slot.start),
+                isAvailable: true,
                 node: (
                   <button
                     key={slot.id}
@@ -3798,7 +3802,7 @@ function AvailabilityCalendar({
                 )
               };
             })
-          ].sort((a, b) => a.start - b.start) : [];
+          ].sort((a, b) => Number(b.isAvailable) - Number(a.isAvailable) || a.start - b.start) : [];
           return (
             <div className={date ? "calendar-cell" : "calendar-cell blank"} key={dateKey}>
               {date ? <span className="calendar-date">{date.getDate()}</span> : null}

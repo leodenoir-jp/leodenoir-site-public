@@ -4690,12 +4690,27 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
     }
   };
 
-  return translations[menu.id]?.[language] ?? {
+  const display = translations[menu.id]?.[language] ?? {
     category: menu.category,
     name: menu.name,
     description: menu.description,
     note: menu.note
   };
+
+  if (["jp-intensive-interview", "jp-intensive-presentation", "jp-intensive-exhibition"].includes(menu.id)) {
+    const shortDeadlinePrice = formatPaymentMoney(
+      getPaymentPricingBreakdown(35, "PayPal", "USD").finalCustomerPrice,
+      "USD"
+    );
+    const shortDeadlineNote = {
+      ja: `2週間以内の短期集中は ${shortDeadlinePrice} / 50min. を目安に個別相談`,
+      en: `For intensive preparation within 2 weeks, ${shortDeadlinePrice} / 50min. is used as a guide.`,
+      "zh-Hant": `2週內短期集中以 ${shortDeadlinePrice} / 50min. 為參考，個別討論。`
+    }[language];
+    return { ...display, note: shortDeadlineNote };
+  }
+
+  return display;
 }
 
 function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {

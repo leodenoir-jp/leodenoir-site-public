@@ -601,6 +601,35 @@ textarea {
   font-weight: 900;
 }
 
+.tarot-email-section {
+  min-width: 0;
+  padding: 24px 20px;
+  border-left: 3px solid var(--blue);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.tarot-email-section .tarot-email-scope {
+  font-weight: 600;
+  color: var(--navy);
+}
+
+.tarot-email-topic {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.tarot-email-topic h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.tarot-email-topic p:last-child {
+  margin-bottom: 0;
+}
+
 .check-list li::before {
   content: "";
   display: inline-block;

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
 import { getServiceBySlug } from "../data/services";
-import { tarotEmailTerms } from "../data/tarotTerms";
+import { tarotContactTerms, tarotEmailTerms } from "../data/tarotTerms";
 
 export function ServiceDetailPage({ route }: { route: Route }) {
   const slug = route.path.replace("/services/", "");
@@ -71,11 +71,23 @@ export function ServiceDetailPage({ route }: { route: Route }) {
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </DetailSection>
-            {service.slug === "tarot-card-reading" ? tarotEmailTerms.map((section) => (
-              <DetailSection key={section.title} title={section.title}>
-                {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-              </DetailSection>
-            )) : null}
+            {service.slug === "tarot-card-reading" ? (
+              <>
+                <section className="detail-section tarot-email-section" aria-labelledby="tarot-email-title">
+                  <h2 id="tarot-email-title">メール鑑定について</h2>
+                  <p className="tarot-email-scope">以下の料金・お届け日数・質問回数は、メール鑑定のみのご案内です。オンライン・対面鑑定には適用されません。</p>
+                  {tarotEmailTerms.map((section) => (
+                    <div className="tarot-email-topic" key={section.title}>
+                      <h3>{section.title}</h3>
+                      {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                    </div>
+                  ))}
+                </section>
+                <DetailSection title="ご連絡・返信期限・キャンセルについて（全鑑定共通）">
+                  {tarotContactTerms.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </DetailSection>
+              </>
+            ) : null}
             <DetailSection title="注意事項">
               {service.notes.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>

@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { AboutPage } from "./pages/AboutPage";
 import { ContactPage } from "./pages/ContactPage";
 import { CounselingBookingPage } from "./pages/CounselingBookingPage";
+import { TarotBookingPage } from "./pages/TarotBookingPage";
 import { HomePage } from "./pages/HomePage";
 import { LearningPlatformPage } from "./pages/LearningPlatformPage";
 import { LegalPageView } from "./pages/LegalPageView";
@@ -58,6 +59,7 @@ function renderPage(route: Route) {
   if (route.path === "/about") return <AboutPage route={route} />;
   if (route.path === "/services") return <ServicesPage route={route} />;
   if (route.path === "/contact") return <ContactPage />;
+  if (route.path === "/tarot/booking") return <TarotBookingPage />;
   if (route.path === "/counseling/booking" || route.path === "/counseling/admin") {
     return <CounselingBookingPage route={route} />;
   }

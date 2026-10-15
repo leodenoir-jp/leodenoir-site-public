@@ -533,6 +533,7 @@ export const services: Service[] = [
   },
   {
     slug: "tarot-card-reading",
+    externalUrl: "/tarot/booking",
     category: "キャリア形成・対話支援",
     title: "タロットカード鑑定",
     price: "",

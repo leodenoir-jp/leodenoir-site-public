@@ -2363,7 +2363,8 @@ textarea {
   border-radius: var(--radius);
   box-shadow: 0 10px 24px rgba(11, 22, 42, 0.08);
   backdrop-filter: blur(14px);
-  display: grid;
+  display: flex;
+  overflow-x: auto;
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   left: 50%;
@@ -2385,6 +2386,8 @@ textarea {
 }
 
 .counseling-admin-tabs button {
+  flex: 1 0 auto;
+  white-space: nowrap;
   background: transparent;
   border: 1px solid transparent;
   border-radius: calc(var(--radius) - 2px);
@@ -3120,4 +3123,52 @@ textarea {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+.tarot-booking-content { display: grid; gap: 32px; max-width: 1100px; }
+.tarot-mode-selector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; border: 0; min-width: 0; }
+.tarot-mode-selector legend { margin-bottom: 12px; font-weight: 700; }
+.tarot-mode-selector label { display: flex; gap: 12px; align-items: center; padding: 18px 14px; border: 1px solid var(--line); border-radius: 6px; background: white; cursor: pointer; }
+.tarot-mode-selector label.selected { border-color: #527f99; background: #edf5fa; }
+.tarot-mode-selector input { width: 20px; height: 20px; flex: 0 0 20px; }
+.tarot-mode-selector label span span { display: block; margin-top: 8px; font-size: 14px; }
+.tarot-guidance, .tarot-preline { white-space: pre-line; overflow-wrap: anywhere; }
+.tarot-calendar { width: 100%; min-width: 0; }
+.tarot-calendar-toolbar { display: flex; justify-content: center; align-items: center; gap: 20px; }
+.tarot-calendar-toolbar button { width: 40px; height: 40px; background: white; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.tarot-calendar-toolbar label { display: flex; gap: 10px; align-items: center; }
+.tarot-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); width: 100%; }
+.tarot-weekday, .tarot-day { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 7px; min-width: 0; }
+.tarot-weekday { text-align: center; background: #edf2f5; }
+.tarot-day { min-height: 112px; background: white; }
+.tarot-day.empty { background: #f1f4f6; }
+.tarot-day > strong { font-size: 12px; display: block; margin-bottom: 7px; }
+.tarot-day .calendar-booking { display: block; width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; text-align: left; line-height: 1.5; padding: 4px; }
+.tarot-day .calendar-booking.selected { outline: 2px solid #255e80; outline-offset: -2px; }
+.tarot-day .calendar-booking.busy-slot { background: #e1e4e7; color: #46515b; border: 1px solid #bcc5cc; }
+.tarot-day .buffer-blocked { border: 1px dashed #a94442; }
+.tarot-request-form { border-top: 1px solid var(--line); padding-top: 28px; }
+.tarot-terms { display: grid; gap: 24px; margin: 24px 0; }
+.tarot-terms h2 { font-size: 21px; }
+.tarot-terms p { line-height: 1.9; }
+.tarot-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.tarot-success { padding: 28px 0; border-top: 4px solid #397658; }
+.tarot-admin-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.tarot-admin-heading h2 { font-size: 24px; }
+.tarot-admin-heading h3 { font-size: 19px; overflow-wrap: anywhere; }
+.tarot-admin-heading small { display: block; font-size: 14px; font-weight: 400; margin-top: 5px; }
+.tarot-admin-panel { min-width: 0; }
+.tarot-request-item { border: 1px solid var(--line); background: white; border-radius: 6px; padding: 22px; margin: 20px 0; min-width: 0; overflow-wrap: anywhere; }
+.tarot-admin-controls { border: 0; padding: 0; margin: 16px 0 0; display: grid; gap: 16px; min-width: 0; }
+.tarot-admin-controls label { display: grid; gap: 7px; min-width: 0; }
+.tarot-admin-controls .counseling-consent { display: flex; }
+.tarot-admin-controls textarea { width: 100%; }
+.tarot-mail-log { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.tarot-override { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 0; }
+@media (max-width: 700px) {
+  .tarot-mode-selector { grid-template-columns: 1fr; }
+  .tarot-day { padding: 3px; min-height: 88px; }
+  .tarot-day .calendar-booking { font-size: 10px; padding: 2px; }
+  .tarot-calendar-toolbar { gap: 10px; }
+  .tarot-request-item { padding: 16px 12px; }
+  .tarot-admin-controls .platform-grid { grid-template-columns: 1fr; }
 }

@@ -107,7 +107,7 @@ export function ServiceDetailPage({ route }: { route: Route }) {
                 href={service.externalUrl}
                 onClick={service.externalUrl.startsWith("/") ? (event) => handleNav(event, service.externalUrl ?? "/", route.navigate) : undefined}
               >
-                {service.slug === "personal-counseling"
+                {service.slug === "personal-counseling" || service.slug === "tarot-card-reading"
                   ? "予約する"
                   : service.externalUrl.startsWith("/learning")
                     ? "Learningページで確認する"

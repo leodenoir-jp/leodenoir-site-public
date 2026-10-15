@@ -5,11 +5,13 @@
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "scripts": {
+    "test:tarot": "tsc -p tsconfig.tarot-api.json && node --test scripts/tarot.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@holiday-jp/holiday_jp": "2.5.1",
     "@supabase/supabase-js": "^2.110.8",
     "@vitejs/plugin-react": "^4.3.4",
     "react": "^19.0.0",
@@ -18,7 +20,10 @@
     "vite": "^6.0.7"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.9",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2"
+    "@types/react-dom": "^19.0.2",
+    "pg": "^8.23.1"
   }
 }

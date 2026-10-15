@@ -3,6 +3,7 @@ import type { Route } from "../App";
 import { Seo } from "../components/Seo";
 import { BusyCalendarSlot, getBusySlotsForDate, type BusySlot } from "../components/BusyCalendarSlots";
 import { AvailabilityCalendarLegend, CalendarDayEntries } from "../components/CalendarDayEntries";
+import { TarotAdminPanel } from "../components/TarotAdminPanel";
 
 type CounselingSlot = {
   id: string;
@@ -66,7 +67,7 @@ type CounselingAppointment = {
 type CalendarReservation = {
   starts_at: string;
   ends_at: string;
-  source_type: "learning" | "counseling";
+  source_type: "learning" | "counseling" | "tarot";
   source_id: string;
   status: "active" | "cancelled";
 };
@@ -78,7 +79,7 @@ type CounselingAdminData = {
   reservations: CalendarReservation[];
 };
 
-type CounselingAdminTab = "appointments" | "schedule" | "guidance";
+type CounselingAdminTab = "appointments" | "schedule" | "guidance" | "tarot" | "tarot-email" | "tarot-settings";
 
 const weekdayLabels = ["日", "月", "火", "水", "木", "金", "土"];
 const counselingAdminSessionKey = "ldn-counseling-admin-session";
@@ -616,7 +617,7 @@ function CounselorAdminPage() {
   return (
     <>
       <Seo title="カウンセラー専用管理" description="個別カウンセリングの予約管理画面です。" noIndex />
-      <section className="page-hero counseling-admin-hero"><div className="container"><p className="eyebrow">Counselor only</p><h1>個別カウンセリング管理</h1><p>予約、決済、Zoomリンク、公開枠、案内文を一か所で管理します。</p></div></section>
+      <section className="page-hero counseling-admin-hero"><div className="container"><p className="eyebrow">Counselor only</p><h1>カウンセリング・タロット管理</h1><p>予約、決済、Zoomリンク、公開枠、案内文を一か所で管理します。</p></div></section>
       <section className="section platform-section">
         <div className="container platform-stack counseling-admin-stack">
           {message ? <p className={message.includes("できません") ? "form-error" : "form-success"}>{message}</p> : null}
@@ -625,7 +626,10 @@ function CounselorAdminPage() {
             {[
               ["appointments", "予約一覧"],
               ["schedule", "スケジュール登録"],
-              ["guidance", "案内文"]
+              ["guidance", "案内文"],
+              ["tarot", "タロット予約・相談"],
+              ["tarot-email", "メール鑑定"],
+              ["tarot-settings", "タロット公開枠・案内文"]
             ].map(([tab, label]) => (
               <button
                 className={activeAdminTab === tab ? "active" : ""}
@@ -638,6 +642,7 @@ function CounselorAdminPage() {
             ))}
           </nav>
 
+          {activeAdminTab === "tarot" || activeAdminTab === "tarot-email" || activeAdminTab === "tarot-settings" ? <TarotAdminPanel token={sessionToken} view={activeAdminTab} /> : null}
           {activeAdminTab === "appointments" ? (
           <section className="platform-card">
             <h2>予約一覧</h2>
@@ -801,7 +806,7 @@ function CounselingAdminCalendar({
                 const appointment = appointmentByBookingId.get(reservation.source_id);
                 const label = reservation.source_type === "learning"
                   ? "Learning予約済"
-                  : `カウンセリング予約済${appointment ? ` / ${appointment.counseling_clients.display_name}` : ""}`;
+                  : reservation.source_type === "tarot" ? "タロット予約済" : `カウンセリング予約済${appointment ? ` / ${appointment.counseling_clients.display_name}` : ""}`;
                 return (
                   <span className={`calendar-booking ${reservation.source_type === "learning" ? "learning-reserved" : "counseling-reserved"}`} key={`${reservation.source_type}-${reservation.source_id}`} aria-label={`${label} ${formatTime(reservation.starts_at)}から${formatTime(reservation.ends_at)}`} title={label}>
                     {formatTime(reservation.starts_at)}-{formatTime(reservation.ends_at)}

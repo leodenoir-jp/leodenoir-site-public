@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
 import { getServiceBySlug } from "../data/services";
+import { tarotEmailTerms } from "../data/tarotTerms";
 
 export function ServiceDetailPage({ route }: { route: Route }) {
   const slug = route.path.replace("/services/", "");
@@ -70,6 +71,11 @@ export function ServiceDetailPage({ route }: { route: Route }) {
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </DetailSection>
+            {service.slug === "tarot-card-reading" ? tarotEmailTerms.map((section) => (
+              <DetailSection key={section.title} title={section.title}>
+                {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              </DetailSection>
+            )) : null}
             <DetailSection title="注意事項">
               {service.notes.map((paragraph) => (
                 <p key={paragraph}>{paragraph}</p>

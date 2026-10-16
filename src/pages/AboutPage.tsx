@@ -72,9 +72,14 @@ export function AboutPage({ route }: { route: Route }) {
             Leo de Noir / Workaholic Owl が目指すのは、自分の人生や役割を受け止め、自ら成長し、変化していく人を増やすこと。
             その積み重ねを通じて、日本社会の活性化と、土地・文化・営みの継承に寄与していくことです。
           </p>
-          <a className="button primary" href="/contact" onClick={(event) => handleNav(event, "/contact", route.navigate)}>
-            相談・依頼する
-          </a>
+          <div className="button-row">
+            <a className="button primary" href="/contact" onClick={(event) => handleNav(event, "/contact", route.navigate)}>
+              問い合わせる
+            </a>
+            <a className="button primary" href="/services" onClick={(event) => handleNav(event, "/services", route.navigate)}>
+              相談・依頼する
+            </a>
+          </div>
         </div>
       </section>
       <section className="section">

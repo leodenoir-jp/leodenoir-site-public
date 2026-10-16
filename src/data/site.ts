@@ -19,12 +19,12 @@ export const siteConfig = {
       url: "/external/youtube"
     },
     {
-      label: "Tiktok：れお[Leo de Noir運営者]",
-      media: "TikTok",
-      logoText: "TikTok",
-      logoPath: "/images/sns-tiktok.png",
-      accountName: "れお[Leo de Noir運営者]",
-      url: "/external/tiktok"
+      label: "YouTube：yuki.leo999",
+      media: "YouTube",
+      logoText: "YouTube",
+      logoPath: "/images/sns-youtube.png",
+      accountName: "yuki.leo999",
+      url: "/external/youtube-yuki-leo999"
     },
     {
       label: "note：leotimez",

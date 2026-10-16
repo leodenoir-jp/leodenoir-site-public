@@ -316,7 +316,7 @@ export const legalPages: LegalPage[] = [
       { type: "heading", text: "第6条　外部サービス・外部リンクについて" },
       {
         type: "paragraph",
-        text: "本サイトには、YouTube、TikTok、note、Learningページ、外部予約サイト、その他第三者が運営するウェブサイトへのリンクが含まれる場合があります。"
+        text: "本サイトには、YouTube、note、Learningページ、外部予約サイト、その他第三者が運営するウェブサイトへのリンクが含まれる場合があります。"
       },
       {
         type: "paragraph",

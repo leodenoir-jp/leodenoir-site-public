@@ -89,7 +89,7 @@ function Footer({ route }: { route: Route }) {
             {siteConfig.snsLinks.map((sns) => (
               <li key={sns.label}>
                 {sns.url ? (
-                  <a href={sns.url} target="_blank" rel="noreferrer" aria-label={sns.label}>
+                  <a href={sns.url} target="_blank" rel="noreferrer" aria-label={sns.label} title={sns.label}>
                     <img src={sns.logoPath} alt="" />
                   </a>
                 ) : (

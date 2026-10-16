@@ -19,11 +19,11 @@ export const siteConfig = {
       url: "/external/youtube"
     },
     {
-      label: "YouTube：yuki.leo999",
+      label: "YouTube：Leo l 🦁Leo de Noir事業運営責任者🦉",
       media: "YouTube",
       logoText: "YouTube",
       logoPath: "/images/sns-youtube.png",
-      accountName: "yuki.leo999",
+      accountName: "Leo l 🦁Leo de Noir事業運営責任者🦉",
       url: "/external/youtube-yuki-leo999"
     },
     {

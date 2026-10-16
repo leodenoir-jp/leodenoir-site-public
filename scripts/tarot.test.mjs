@@ -39,6 +39,22 @@ test('availability: disabled by default, correct weekday, buffers and exclusions
   assert.throws(() => domain.validateSettings({ ...settings, daily_limit: 0 }));
 });
 
+test('date overrides outside the publication horizon remain saved but need a longer window', () => {
+  const settings = domain.defaultTarotSettings();
+  const now = new Date('2026-10-16T00:00:00+09:00');
+  settings.enabled = true;
+  settings.horizon_days = 31;
+  settings.date_overrides = ['2026-11-20', '2026-11-21'].map(date => ({ date, enabled: true, start: '17:00', end: '21:00' }));
+  assert.equal(domain.tarotSlots(settings, [], [], 'online', now).length, 0);
+  const window = domain.tarotPublicationWindow(settings, now);
+  assert.equal(window.lastDate, '2026-11-15');
+  assert.equal(window.requiredDays, 37);
+  assert.deepEqual(window.outsideDates, ['2026-11-20', '2026-11-21']);
+  settings.horizon_days = window.requiredDays;
+  assert.equal(domain.tarotSlots(settings, [], [], 'online', now).length, 14);
+  assert.deepEqual(domain.tarotPublicationWindow(settings, now).outsideDates, []);
+});
+
 test('business-day due date excludes Japanese holidays and weekends in any machine timezone', () => {
   assert.equal(domain.jstDate(thirdBusinessDay(iso('2026-10-09T12:00:00'))), '2026-10-15');
   assert.equal(domain.jstDate(thirdBusinessDay(iso('2026-10-16T12:00:00'))), '2026-10-21');

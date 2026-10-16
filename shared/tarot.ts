@@ -25,6 +25,15 @@ export function defaultTarotSettings(): TarotSettings {
     intake_text: "現在の状況、何に迷っているか、いつまでにどうしたいかを、分かる範囲で具体的にお知らせください。\n例：今の職場に残るか転職するか迷っています。今後3か月で判断するために、私が整理すべきことを知りたいです。\n1回につき1テーマです。鑑定前の問いの整理は、鑑定後の質問回数には含みません。" };
 }
 export const jstDate = (value: Date | string) => new Date(new Date(value).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+export function tarotPublicationWindow(settings: TarotSettings, now = new Date()) {
+  const today = jstDate(now);
+  const start = Date.parse(`${today}T00:00:00+09:00`);
+  const lastDate = jstDate(new Date(start + (settings.horizon_days - 1) * 86400000));
+  const outsideDates = settings.date_overrides.filter(rule => rule.enabled && rule.date > lastDate).map(rule => rule.date).sort();
+  const lastOverride = outsideDates.at(-1);
+  const requiredDays = lastOverride ? Math.round((Date.parse(`${lastOverride}T00:00:00+09:00`) - start) / 86400000) + 1 : settings.horizon_days;
+  return { today, lastDate, outsideDates, requiredDays };
+}
 export const addMinutes = (value: string, minutes: number) => new Date(Date.parse(value) + minutes * 60000).toISOString();
 export const overlaps = (start: string, end: string, busy: BusyTime) => Date.parse(start) < Date.parse(busy.ends_at) && Date.parse(end) > Date.parse(busy.starts_at);
 export function reservationRange(mode: TarotMode, start: string) {

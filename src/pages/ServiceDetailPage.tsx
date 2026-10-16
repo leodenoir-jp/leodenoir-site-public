@@ -44,8 +44,11 @@ export function ServiceDetailPage({ route }: { route: Route }) {
         <div className="container detail-layout">
           <article className="detail-main">
             <DetailSection title="サービス概要">
+              {service.overviewHeading ? <h3 className="detail-overview-heading">{service.overviewHeading}</h3> : null}
               {service.overview.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
+                <p key={typeof paragraph === "string" ? paragraph : paragraph.text} className={typeof paragraph === "string" ? undefined : "detail-overview-emphasis"}>
+                  {typeof paragraph === "string" ? paragraph : <strong>{paragraph.text}</strong>}
+                </p>
               ))}
             </DetailSection>
             <DetailSection title="このサービスで相談・依頼できること">

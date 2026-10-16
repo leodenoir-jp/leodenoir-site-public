@@ -609,6 +609,18 @@ textarea {
   padding-bottom: 36px;
 }
 
+.detail-overview-heading {
+  color: var(--navy);
+  font-size: 23px;
+  line-height: 1.4;
+  margin: 22px 0 16px;
+}
+
+.detail-section p.detail-overview-emphasis {
+  color: var(--navy);
+  margin-top: 24px;
+}
+
 .detail-price {
   color: var(--navy) !important;
   font-size: 22px;

@@ -10,7 +10,8 @@ export type Service = {
   summary: string;
   image: string;
   catchCopy: string;
-  overview: string[];
+  overview: Array<string | { text: string; emphasis: true }>;
+  overviewHeading?: string;
   availableFor: string[];
   audience: string[];
   method: string[];
@@ -230,10 +231,15 @@ export const services: Service[] = [
     summary: "キャリアの転換期にある方が、自分の意思で次の道を選ぶための伴走型コーチングです。",
     image: "/images/service_life-career-coaching.png",
     catchCopy: "自分の意思で、キャリアを選び取る。仕事と人生のハンドルを、もう一度自分の手に。",
+    overviewHeading: "人生とキャリアに、自分自身の答えを。",
     overview: [
-      "キャリアの転換期にある方が、自分の意思で次の道を選び取れるよう、思考・感情・行動を整理する一対一の伴走型コーチングです。",
-      "押し付けの提案ではなく、対話を通じて現在地を棚卸しし、あなた自身の内側にある本音や判断軸を言語化します。",
-      "そのうえで、実行可能な行動計画へ落とし込み、継続的に前へ進むためのサポートを行います。"
+      "キャリアは、人生の一部であり、人生はキャリアとともに変化していくもの。",
+      "仕事における成功が、必ずしも人生の充実を意味するとは限りません。",
+      "Leo de Noirの「ライフ=キャリアコーチング」は、キャリア形成と人生設計を切り離さず、一人ひとりが納得できる未来を選び取り、実現していくための伴走型サービスです。",
+      "コンサルティング経験と個別相談の実務経験を活かし、表面的な悩みだけでなく、まだ言葉にできていない本音や課題の背景まで、対話を通じて丁寧に掘り下げていきます。",
+      "また、職場のストレスや人間関係といった精神的な負担にも目を向けながら、理想と現実の間にある課題を整理し、具体的な行動へとつなげます。",
+      { text: "ただ答えを見つけるのではなく、自分の意思で選び、行動できるようになること。", emphasis: true },
+      "その過程を、Leo de Noirがともに歩みます。"
     ],
     availableFor: [
       "今後のキャリアの方向性整理",

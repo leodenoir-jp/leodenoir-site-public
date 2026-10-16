@@ -22,14 +22,14 @@ export function thirdBusinessDay(received: string) {
   }
   return new Date(`${date}T23:59:59+09:00`).toISOString();
 }
-async function settings(db: DB, initialize = false): Promise<TarotSettings> {
+async function settings(db: DB, initialize = false): Promise<{ config: TarotSettings; updatedAt: string | null }> {
   if (initialize) {
     const { error } = await db.from("tarot_settings").upsert({ id: true, settings: defaultTarotSettings() }, { onConflict: "id", ignoreDuplicates: true });
     if (error) throw error;
   }
-  const { data, error } = await db.from("tarot_settings").select("settings").eq("id", true).maybeSingle();
+  const { data, error } = await db.from("tarot_settings").select("settings,updated_at").eq("id", true).maybeSingle();
   if (error) throw error;
-  return validateSettings(data?.settings ?? defaultTarotSettings());
+  return { config: validateSettings(data?.settings ?? defaultTarotSettings()), updatedAt: data?.updated_at ?? null };
 }
 async function availability(db: DB, config: TarotSettings, mode: TarotMode) {
   const busy: Array<{ starts_at: string; ends_at: string; source_type: string; source_id: string }> = [];
@@ -81,13 +81,13 @@ export default async function handler(req: Request, res: Response) {
     const isPublic = (req.method === "GET" && ["online", "in_person", "email"].includes(mode)) || publicRequest;
     if (!isPublic) await assertCounselor(getBearerToken(req.headers));
     const db = await createServiceClient();
-    const config = await settings(db, !isPublic);
+    const { config, updatedAt } = await settings(db, !isPublic);
     if (req.method === "GET") {
       if (isPublic) return res.status(200).json({ enabled: config.enabled, guidance: config.guidance, ...await availability(db, config, mode as TarotMode) });
       const page = Math.max(0, Math.min(10000, Number(req.query?.page) || 0));
       const { data, error } = await db.from("tarot_requests").select("*,counseling_clients(*),tarot_mail(id,kind,status,sent_at,attempted_at,error,subject,body)").order("created_at", { ascending: false }).range(page * 50, page * 50 + 49);
       if (error) throw error;
-      return res.status(200).json({ settings: config, requests: data, page, ...await availability(db, config, "online") });
+      return res.status(200).json({ settings: config, settingsUpdatedAt: updatedAt, requests: data, page, ...await availability(db, config, "online") });
     }
     if (publicRequest) {
       const id = cleanText(body.id), email = cleanText(body.email).toLowerCase(), name = cleanText(body.name);
@@ -134,8 +134,12 @@ export default async function handler(req: Request, res: Response) {
     }
     if (body.action === "save-settings") {
       const next = validateSettings(body.settings as TarotSettings);
-      const { error } = await db.from("tarot_settings").update({ settings: next, updated_at: new Date().toISOString() }).eq("id", true);
+      const expected = cleanText(body.settingsUpdatedAt);
+      check(expected.length > 0, "設定の読み込みが必要です。再読み込みしてください。");
+      const { data, error } = await db.from("tarot_settings").update({ settings: next, updated_at: new Date().toISOString() })
+        .eq("id", true).eq("updated_at", expected).select("updated_at").maybeSingle();
       if (error) throw error;
+      if (!data) return res.status(409).json({ message: "別の画面で公開枠が更新されました。再読み込みしてから変更内容を確認してください。" });
       return res.status(200).json({ message: "公開枠・案内文を保存しました。" });
     }
     const id = cleanText(body.id);

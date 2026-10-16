@@ -165,5 +165,40 @@ test('API requires admin auth and public availability strips private fields', as
     const invalid = response();
     await handler({ method: 'POST', body: { action: 'request', name: '', email: 'invalid', id: 'bad' } }, invalid);
     assert.equal(invalid.code, 400);
+
+    const record = { settings, updated_at: '2026-10-16T00:00:00.000Z' };
+    globalThis.tarotTestDB = { from(table) {
+      const filters = {};
+      let update = null;
+      const q = {
+        upsert: async () => ({ error: null }),
+        select() { return q; }, update(value) { update = value; return q; },
+        eq(key, value) { filters[key] = value; return q; },
+        not() { return q; }, gte() { return q; }, order() { return q; },
+        async maybeSingle() {
+          if (table !== 'tarot_settings') throw Error('Unexpected maybeSingle');
+          if (!update) return { data: record, error: null };
+          if (filters.updated_at !== record.updated_at) return { data: null, error: null };
+          Object.assign(record, update);
+          return { data: { updated_at: record.updated_at }, error: null };
+        },
+        async range() { return { data: [] }; }, async limit() { return { data: [] }; }
+      };
+      return q;
+    } };
+    const auth = { Authorization: 'Bearer test-token' };
+    const admin = response();
+    await handler({ method: 'GET', query: { mode: 'admin' }, headers: auth }, admin);
+    assert.equal(admin.code, 200);
+    assert.equal(admin.data.settingsUpdatedAt, record.updated_at);
+    const edited = { ...settings, horizon_days: 60 };
+    const stale = response();
+    await handler({ method: 'POST', headers: auth, body: { action: 'save-settings', settings: edited, settingsUpdatedAt: '2026-10-15T00:00:00.000Z' } }, stale);
+    assert.equal(stale.code, 409);
+    assert.equal(record.settings.horizon_days, settings.horizon_days);
+    const saved = response();
+    await handler({ method: 'POST', headers: auth, body: { action: 'save-settings', settings: edited, settingsUpdatedAt: admin.data.settingsUpdatedAt } }, saved);
+    assert.equal(saved.code, 200);
+    assert.equal(record.settings.horizon_days, 60);
   } finally { delete globalThis.tarotTestDB; }
 });

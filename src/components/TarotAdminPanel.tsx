@@ -11,7 +11,7 @@ type Reading = {
   counseling_clients: { email: string; display_name: string; client_id: string; zoom_link: string | null };
   tarot_mail: Mail[];
 };
-type AdminData = { settings: TarotSettings; requests: Reading[]; slots: TarotSlot[]; busySlots: BusyTime[] };
+type AdminData = { settings: TarotSettings; settingsUpdatedAt: string | null; requests: Reading[]; slots: TarotSlot[]; busySlots: BusyTime[] };
 export function TarotAdminPanel({ token, view }: { token: string; view: "tarot" | "tarot-email" | "tarot-settings" }) {
   const [data, setData] = useState<AdminData | null>(null);
   const [message, setMessage] = useState("");
@@ -22,7 +22,7 @@ export function TarotAdminPanel({ token, view }: { token: string; view: "tarot" 
   const lock = useRef(false);
   const mock = token === "mock-counseling-admin";
   const load = useCallback(async () => {
-    if (mock) { setData({ settings: defaultTarotSettings(), requests: [], slots: [], busySlots: [] }); return; }
+    if (mock) { setData({ settings: defaultTarotSettings(), settingsUpdatedAt: null, requests: [], slots: [], busySlots: [] }); return; }
     const response = await fetch(`/api/tarot?mode=admin&page=${page}`, { headers: { Authorization: `Bearer ${token}` } });
     const body = await response.json();
     if (!response.ok) throw new Error(body.message || "タロット管理情報を取得できませんでした。");
@@ -34,7 +34,8 @@ export function TarotAdminPanel({ token, view }: { token: string; view: "tarot" 
     if (mock) { setMessage("モック表示です。保存・メール送信は行いません。"); return false; }
     lock.current = true; setPending(true); setError(""); setMessage("");
     try {
-      const response = await fetch("/api/tarot", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+      const request = body.action === "save-settings" ? { ...body, settingsUpdatedAt: data?.settingsUpdatedAt } : body;
+      const response = await fetch("/api/tarot", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(request) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "操作を完了できませんでした。");
       setMessage(result.message); await load(); return true;
@@ -132,6 +133,7 @@ function TarotSchedule({ data, pending, save }: { data: AdminData; pending: bool
       {dirty || override.date ? <p className="form-error" role="status">未保存の変更があります。保存するまで予約画面には反映されません。</p> : null}
       <button className="button primary" type="submit">公開枠・案内文を保存</button>
       <h3>保存済みの公開枠</h3><p className="platform-note">公開対象期間：{savedPublication.today} ～ {savedPublication.lastDate}。空き枠をクリックすると、その日の開始時刻を除外して保存します。予約済の枠は削除できません。</p>
+      {!data.settings.date_overrides.some(rule => rule.enabled) && !Object.values(data.settings.weekly_rules).some(rule => rule.enabled) ? <p className="form-error" role="status">保存済みの受付日はありません。日付ごとの例外で「受付する」を選び、日付設定を保存してください。</p> : null}
       <TarotCalendar slots={data.slots} busy={data.busySlots} deleting onSelect={slot => {
         if (!confirm(`${tarotDateTime(slot.start)}の公開枠を削除しますか？未保存の編集は反映せず、保存済み設定に除外を追加します。`)) return;
         const date = jstDate(slot.start); const time = new Date(Date.parse(slot.start) + 9 * 3600000).toISOString().slice(11, 16);

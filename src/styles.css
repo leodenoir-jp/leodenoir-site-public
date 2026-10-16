@@ -3163,7 +3163,20 @@ textarea {
 .tarot-admin-controls .counseling-consent { display: flex; }
 .tarot-admin-controls textarea { width: 100%; }
 .tarot-mail-log { padding: 16px 0; border-bottom: 1px solid var(--line); }
-.tarot-override { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 0; }
+.tarot-date-setting { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.5fr) repeat(2, minmax(120px, .8fr)); align-items: end; gap: 12px; }
+.tarot-date-modes { display: flex; min-height: 44px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.tarot-date-modes label { display: flex; align-items: center; justify-content: center; flex: 1; gap: 6px; padding: 6px 10px; cursor: pointer; line-height: 1.3; }
+.tarot-date-modes label + label { border-left: 1px solid var(--line); }
+.tarot-date-modes label:has(input:checked) { background: #e6f0f7; color: #173e59; font-weight: 700; }
+.tarot-date-modes label:focus-within { outline: 2px solid #2c6591; outline-offset: -2px; }
+.platform-form .tarot-date-modes input[type="radio"] { position: absolute; opacity: 0; width: 1px; min-height: 1px; padding: 0; border: 0; }
+.tarot-saved-dates { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 12px 0; }
+.tarot-saved-dates summary { cursor: pointer; font-weight: 700; }
+.tarot-override { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+.tarot-override:last-child { border-bottom: 0; }
+.tarot-override strong { display: inline-block; min-width: 4.5em; margin-right: 8px; }
+.tarot-date-open { color: #146247; }
+.tarot-date-closed { color: #7b4c27; }
 @media (max-width: 700px) {
   .tarot-mode-selector { grid-template-columns: 1fr; }
   .tarot-day { padding: 3px; min-height: 88px; }
@@ -3171,4 +3184,7 @@ textarea {
   .tarot-calendar-toolbar { gap: 10px; }
   .tarot-request-item { padding: 16px 12px; }
   .tarot-admin-controls .platform-grid { grid-template-columns: 1fr; }
+  .tarot-date-setting { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tarot-date-setting > label:first-child, .tarot-date-modes { grid-column: 1 / -1; }
+  .tarot-override { align-items: flex-start; }
 }

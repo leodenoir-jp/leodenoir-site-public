@@ -104,7 +104,7 @@ function TarotRequestEditor({ reading: r, pending, act }: { reading: Reading; pe
 }
 function TarotSchedule({ data, pending, save }: { data: AdminData; pending: boolean; save: (body: Record<string, unknown>) => Promise<boolean> }) {
   const [settings, setSettings] = useState(data.settings);
-  const [override, setOverride] = useState<Rule & { date: string }>({ date: "", enabled: false, start: "10:00", end: "18:00" });
+  const [override, setOverride] = useState<Rule & { date: string }>({ date: "", enabled: true, start: "10:00", end: "18:00" });
   useEffect(() => setSettings(data.settings), [data.settings]);
   const update = (day: number, patch: Partial<Rule>) => setSettings(s => ({ ...s, weekly_rules: { ...s.weekly_rules, [day]: { ...s.weekly_rules[day], ...patch } } }));
   const persist = (next: TarotSettings) => save({ action: "save-settings", settings: next });
@@ -124,16 +124,27 @@ function TarotSchedule({ data, pending, save }: { data: AdminData; pending: bool
       {publication.outsideDates.length ? <div role="status"><p className="form-error">公開期間外の受付日：{publication.outsideDates.join("、")}</p>{publication.requiredDays <= 120 ? <button type="button" className="button secondary" onClick={() => { const next = { ...settings, horizon_days: publication.requiredDays }; setSettings(next); void persist(next); }}>これらの日付まで公開期間を延長して保存（{publication.requiredDays}日間）</button> : <p>公開期間の上限は120日です。</p>}</div> : null}
       <h3>曜日ごとの受付時間</h3>
       <div className="counseling-weekly-grid">{["日", "月", "火", "水", "木", "金", "土"].map((day, i) => <div className="counseling-weekly-row" key={day}><label className="counseling-consent"><input type="checkbox" checked={settings.weekly_rules[i].enabled} onChange={e => update(i, { enabled: e.target.checked })} />{day}曜日</label><input type="time" step={1800} aria-label={`${day}曜日 開始`} value={settings.weekly_rules[i].start} onChange={e => update(i, { start: e.target.value })} /><input type="time" step={1800} aria-label={`${day}曜日 終了`} value={settings.weekly_rules[i].end} onChange={e => update(i, { end: e.target.value })} /></div>)}</div>
-      <h3>日付ごとの例外</h3><div className="platform-grid four"><label>日付<input type="date" value={override.date} onChange={e => setOverride({ ...override, date: e.target.value })} /></label><label className="counseling-consent"><input type="checkbox" checked={override.enabled} onChange={e => setOverride({ ...override, enabled: e.target.checked })} />受付する</label><label>開始<input type="time" step={1800} value={override.start} onChange={e => setOverride({ ...override, start: e.target.value })} /></label><label>終了<input type="time" step={1800} value={override.end} onChange={e => setOverride({ ...override, end: e.target.value })} /></label></div>
-      <button type="button" className="button secondary" disabled={!override.date} onClick={() => void saveOverride()}>日付設定を保存</button>
-      {settings.date_overrides.map(rule => <div className="tarot-override" key={rule.date}><span>{rule.date} {rule.enabled ? `${rule.start}–${rule.end}` : "受付停止"} {rule.excluded_times?.length ? `除外 ${rule.excluded_times.join("、")}` : ""}</span><button type="button" aria-label={`${rule.date}の例外を削除`} onClick={() => setSettings({ ...settings, date_overrides: settings.date_overrides.filter(r => r.date !== rule.date) })}>×</button></div>)}
+      <h3>日付指定の受付・停止</h3>
+      <p className="platform-note">指定した日の設定は曜日ごとの受付時間より優先されます。</p>
+      <div className="tarot-date-setting">
+        <label>日付<input type="date" value={override.date} onChange={e => setOverride({ ...override, date: e.target.value })} /></label>
+        <div className="tarot-date-modes" role="group" aria-label="日付の受付状態">
+          <label><input type="radio" name="tarot-date-mode" checked={override.enabled} onChange={() => setOverride({ ...override, enabled: true })} />この日を受付する</label>
+          <label><input type="radio" name="tarot-date-mode" checked={!override.enabled} onChange={() => setOverride({ ...override, enabled: false })} />この日は受付停止</label>
+        </div>
+        {override.enabled ? <><label>開始<input type="time" step={1800} value={override.start} onChange={e => setOverride({ ...override, start: e.target.value })} /></label><label>終了<input type="time" step={1800} value={override.end} onChange={e => setOverride({ ...override, end: e.target.value })} /></label></> : null}
+      </div>
+      <button type="button" className="button secondary" disabled={!override.date} onClick={() => void saveOverride()}>{override.enabled ? "受付日を保存" : "受付停止日を保存"}</button>
+      {settings.date_overrides.length ? <details className="tarot-saved-dates"><summary>保存済みの日付設定（受付 {settings.date_overrides.filter(rule => rule.enabled).length}件・停止 {settings.date_overrides.filter(rule => !rule.enabled).length}件）</summary>
+        {settings.date_overrides.slice().sort((a, b) => a.date.localeCompare(b.date)).map(rule => <div className="tarot-override" key={rule.date}><span><strong className={rule.enabled ? "tarot-date-open" : "tarot-date-closed"}>{rule.enabled ? "受付" : "受付停止"}</strong> {rule.date} {rule.enabled ? `${rule.start}–${rule.end}` : ""} {rule.excluded_times?.length ? `除外 ${rule.excluded_times.join("、")}` : ""}</span><button type="button" className="button secondary" disabled={dirty} title={dirty ? "先に未保存の変更を保存してください" : undefined} aria-label={`${rule.date}の設定を削除`} onClick={() => { if (confirm(`${rule.date}の日付設定を削除しますか？`)) void persist({ ...data.settings, date_overrides: data.settings.date_overrides.filter(r => r.date !== rule.date) }); }}>削除</button></div>)}
+      </details> : null}
       <label>公開案内文<textarea rows={4} value={settings.guidance} onChange={e => setSettings({ ...settings, guidance: e.target.value })} maxLength={5000} /></label>
       <label>入金後の相談内容案内（メール鑑定）<textarea rows={7} value={settings.intake_text} onChange={e => setSettings({ ...settings, intake_text: e.target.value })} maxLength={5000} /></label>
       <p className="platform-note">返信期限・対象外テーマ・質問回数等の共通条件は案内に自動付記します。</p>
       {dirty || override.date ? <p className="form-error" role="status">未保存の変更があります。保存するまで予約画面には反映されません。</p> : null}
       <button className="button primary" type="submit">公開枠・案内文を保存</button>
       <h3>保存済みの公開枠</h3><p className="platform-note">公開対象期間：{savedPublication.today} ～ {savedPublication.lastDate}。空き枠をクリックすると、その日の開始時刻を除外して保存します。予約済の枠は削除できません。</p>
-      {!data.settings.date_overrides.some(rule => rule.enabled) && !Object.values(data.settings.weekly_rules).some(rule => rule.enabled) ? <p className="form-error" role="status">保存済みの受付日はありません。日付ごとの例外で「受付する」を選び、日付設定を保存してください。</p> : null}
+      {!data.settings.date_overrides.some(rule => rule.enabled) && !Object.values(data.settings.weekly_rules).some(rule => rule.enabled) ? <p className="form-error" role="status">保存済みの受付日はありません。「日付指定の受付・停止」で受付日を登録してください。</p> : null}
       <TarotCalendar slots={data.slots} busy={data.busySlots} deleting onSelect={slot => {
         if (!confirm(`${tarotDateTime(slot.start)}の公開枠を削除しますか？未保存の編集は反映せず、保存済み設定に除外を追加します。`)) return;
         const date = jstDate(slot.start); const time = new Date(Date.parse(slot.start) + 9 * 3600000).toISOString().slice(11, 16);

@@ -273,11 +273,25 @@ textarea {
   color: var(--muted);
 }
 
-.service-detail-hero img {
-  aspect-ratio: 1 / 1;
+.service-detail-hero,
+.counseling-hero {
+  padding: 52px 0;
+}
+
+.service-detail-hero .two-column,
+.counseling-hero .two-column {
+  align-items: center;
+  gap: 36px;
+}
+
+.service-detail-hero img,
+.counseling-hero img {
+  aspect-ratio: 16 / 9;
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  max-height: 260px;
   object-fit: cover;
+  width: 100%;
 }
 
 .eyebrow {
@@ -2271,14 +2285,6 @@ textarea {
   margin: 0 0 14px;
 }
 
-.counseling-hero img {
-  aspect-ratio: 1 / 1;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  object-fit: cover;
-  width: 100%;
-}
-
 .counseling-booking-section {
   background: #f7f9fc;
 }
@@ -3020,6 +3026,16 @@ textarea {
 
   .page-hero {
     padding: 58px 0;
+  }
+
+  .service-detail-hero,
+  .counseling-hero {
+    padding: 36px 0;
+  }
+
+  .service-detail-hero .two-column,
+  .counseling-hero .two-column {
+    gap: 20px;
   }
 
   .entrance-grid,

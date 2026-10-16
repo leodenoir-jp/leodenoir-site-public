@@ -48,7 +48,7 @@ export function TarotBookingPage() {
   }
   return <>
     <Seo title="タロットカード鑑定の予約" description="オンライン・東京都内23区での対面・メール鑑定のお申し込み。" />
-    <section className="page-hero counseling-hero"><div className="container"><div><p className="eyebrow">Tarot Reading</p><h1>タロットカード鑑定</h1><p>ご希望の鑑定方法をお選びください。</p></div><img src="/images/service_tarot-card-reading.png" alt="タロットカード鑑定" /></div></section>
+    <section className="page-hero counseling-hero"><div className="container two-column"><div><p className="eyebrow">Tarot Reading</p><h1>タロットカード鑑定</h1><p>ご希望の鑑定方法をお選びください。</p></div><img src="/images/service_tarot-card-reading.png" alt="タロットカード鑑定" /></div></section>
     <section className="section"><div className="container tarot-booking-content">
       {success ? <section ref={successPanel} className="tarot-success" role="status" tabIndex={-1}><h2>お申し込みを受け付けました</h2><p style={{ whiteSpace: "pre-line" }}>{success}</p><p>この画面から再度送信する必要はありません。Leoからのご案内をお待ちください。</p><a href="/services/tarot-card-reading" className="button secondary">サービス紹介へ</a></section> : <>
         <fieldset className="tarot-mode-selector" disabled={sending}><legend>鑑定方法</legend>{(Object.keys(tarotModes) as TarotMode[]).map(key => <label key={key} className={mode === key ? "selected" : ""}><input type="radio" name="tarot-mode" checked={mode === key} onChange={() => setMode(key)} /><span><strong>{tarotModes[key]}</strong><span>{key === "email" ? "1テーマ" : "50分"}　{tarotPrices[key].toLocaleString("ja-JP")}円{key === "in_person" ? " + 交通費" : ""}</span></span></label>)}</fieldset>

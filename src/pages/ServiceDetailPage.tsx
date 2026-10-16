@@ -25,6 +25,8 @@ export function ServiceDetailPage({ route }: { route: Route }) {
     );
   }
 
+  const hasBookingPage = service.slug === "personal-counseling" || service.slug === "tarot-card-reading";
+
   return (
     <>
       <Seo title={service.title} description={service.summary} />
@@ -98,16 +100,16 @@ export function ServiceDetailPage({ route }: { route: Route }) {
             <p className="category-label">{service.category}</p>
             <h2>問い合わせ</h2>
             <p>内容が固まっていない段階でも、まずはお問い合わせフォームからご相談ください。</p>
-            <a className={`button ${service.slug === "tarot-card-reading" ? "secondary" : "primary"}`} href="/contact" onClick={(event) => handleNav(event, "/contact", route.navigate)}>
+            <a className={`button ${hasBookingPage ? "secondary" : "primary"}`} href="/contact" onClick={(event) => handleNav(event, "/contact", route.navigate)}>
               問い合わせる
             </a>
             {service.externalUrl ? (
               <a
-                className={`button ${service.slug === "tarot-card-reading" ? "primary" : "secondary"}`}
+                className={`button ${hasBookingPage ? "primary" : "secondary"}`}
                 href={service.externalUrl}
                 onClick={service.externalUrl.startsWith("/") ? (event) => handleNav(event, service.externalUrl ?? "/", route.navigate) : undefined}
               >
-                {service.slug === "personal-counseling" || service.slug === "tarot-card-reading"
+                {hasBookingPage
                   ? "予約する"
                   : service.externalUrl.startsWith("/learning")
                     ? "Learningページで確認する"

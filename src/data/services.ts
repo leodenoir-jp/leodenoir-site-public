@@ -227,7 +227,7 @@ export const services: Service[] = [
     slug: "life-career-coaching",
     category: "キャリア形成・対話支援",
     title: "ライフ=キャリアコーチング",
-    price: "月額 75,000円",
+    price: "初月 30,000円から",
     summary: "キャリアの転換期にある方が、自分の意思で次の道を選ぶための伴走型コーチングです。",
     image: "/images/service_life-career-coaching.png",
     catchCopy: "自分の意思で、キャリアを選び取る。仕事と人生のハンドルを、もう一度自分の手に。",

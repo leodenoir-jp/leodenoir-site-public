@@ -1,6 +1,7 @@
 import type { Route } from "../App";
 import type { ReactNode } from "react";
 import { handleNav } from "../components/Layout";
+import { LifeCareerPlans } from "../components/LifeCareerPlans";
 import { Seo } from "../components/Seo";
 import { getServiceBySlug } from "../data/services";
 import { tarotContactTerms, tarotEmailTerms } from "../data/tarotTerms";
@@ -40,6 +41,7 @@ export function ServiceDetailPage({ route }: { route: Route }) {
           <img src={service.image} alt="" />
         </div>
       </section>
+      {service.slug === "life-career-coaching" ? <LifeCareerPlans route={route} /> : null}
       <section className="section">
         <div className="container detail-layout">
           <article className="detail-main">
@@ -61,20 +63,29 @@ export function ServiceDetailPage({ route }: { route: Route }) {
               {service.audience.length > 0 ? <CheckList items={service.audience} /> : null}
             </DetailSection>
             <DetailSection title="料金">
-              {service.price ? <p className="detail-price">{service.price}</p> : null}
-              {service.priceDetails?.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
+              {service.slug === "life-career-coaching" ? (
+                <p>プランごとの料金とサポート内容は、上のプラン表をご覧ください。</p>
+              ) : (
+                <>
+                  {service.price ? <p className="detail-price">{service.price}</p> : null}
+                  {service.priceDetails?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </>
+              )}
               {service.priceItems && service.priceItems.length > 0 ? <CheckList items={service.priceItems} /> : null}
             </DetailSection>
             <DetailSection title="実施方法">
-              {service.methodIntro?.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-              {service.methodItems && service.methodItems.length > 0 ? <CheckList items={service.methodItems} /> : null}
-              {service.method.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
+              {service.slug === "life-career-coaching" ? (
+                <>
+                  <p>セッションはオンライン会議システムで実施します。初月は90分のトータルプランニングで現状・目標・優先行動を整理します。</p>
+                  <p>その後の面談回数、レビュー頻度、チャット対応は選択したプランにより異なります。実施日時と連絡方法は、お申し込み後に個別に調整します。</p>
+                </>
+              ) : (
+                <>
+                  {service.methodIntro?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                  {service.methodItems && service.methodItems.length > 0 ? <CheckList items={service.methodItems} /> : null}
+                  {service.method.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </>
+              )}
             </DetailSection>
             {service.slug === "tarot-card-reading" ? (
               <>

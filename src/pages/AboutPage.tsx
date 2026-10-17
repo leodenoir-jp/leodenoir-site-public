@@ -169,7 +169,7 @@ export function AboutPage({ route }: { route: Route }) {
             </ul>
             <h3>専門相談・鑑定</h3>
             <ul>
-              <li>不動産終活士</li>
+              <li>認定不動産終活士（一般社団法人 不動産終活支援機構）</li>
               <li>JFTA 日本占い師協会認定 タロットカード士</li>
             </ul>
             <h3>語学</h3>

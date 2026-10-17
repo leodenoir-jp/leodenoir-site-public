@@ -3218,6 +3218,7 @@ textarea {
 }
 
 /* Life = Career Coaching plans. */
+.career-overview .detail-section { max-width: 840px; border-bottom: 0; padding-bottom: 0; }
 .career-plans {
   background: #100d09;
   color: #eee5d1;

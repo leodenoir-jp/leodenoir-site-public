@@ -27,6 +27,17 @@ export function ServiceDetailPage({ route }: { route: Route }) {
   }
 
   const hasBookingPage = service.slug === "personal-counseling" || service.slug === "tarot-card-reading";
+  const isLifeCareer = service.slug === "life-career-coaching";
+  const overview = (
+    <DetailSection title="サービス概要">
+      {service.overviewHeading ? <h3 className="detail-overview-heading">{service.overviewHeading}</h3> : null}
+      {service.overview.map((paragraph) => (
+        <p key={typeof paragraph === "string" ? paragraph : paragraph.text} className={typeof paragraph === "string" ? undefined : "detail-overview-emphasis"}>
+          {typeof paragraph === "string" ? paragraph : <strong>{paragraph.text}</strong>}
+        </p>
+      ))}
+    </DetailSection>
+  );
 
   return (
     <>
@@ -41,52 +52,41 @@ export function ServiceDetailPage({ route }: { route: Route }) {
           <img src={service.image} alt="" />
         </div>
       </section>
-      {service.slug === "life-career-coaching" ? <LifeCareerPlans route={route} /> : null}
+      {isLifeCareer ? (
+        <>
+          <section className="section career-overview">
+            <div className="container">{overview}</div>
+          </section>
+          <LifeCareerPlans route={route} />
+        </>
+      ) : null}
       <section className="section">
         <div className="container detail-layout">
           <article className="detail-main">
-            <DetailSection title="サービス概要">
-              {service.overviewHeading ? <h3 className="detail-overview-heading">{service.overviewHeading}</h3> : null}
-              {service.overview.map((paragraph) => (
-                <p key={typeof paragraph === "string" ? paragraph : paragraph.text} className={typeof paragraph === "string" ? undefined : "detail-overview-emphasis"}>
-                  {typeof paragraph === "string" ? paragraph : <strong>{paragraph.text}</strong>}
-                </p>
-              ))}
-            </DetailSection>
+            {!isLifeCareer ? overview : null}
             <DetailSection title="このサービスで相談・依頼できること">
               <CheckList items={service.availableFor} />
             </DetailSection>
-            <DetailSection title="対象となる方">
-              {service.audienceIntro?.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
-              ))}
-              {service.audience.length > 0 ? <CheckList items={service.audience} /> : null}
-            </DetailSection>
-            <DetailSection title="料金">
-              {service.slug === "life-career-coaching" ? (
-                <p>プランごとの料金とサポート内容は、上のプラン表をご覧ください。</p>
-              ) : (
-                <>
+            {!isLifeCareer ? (
+              <>
+                <DetailSection title="対象となる方">
+                  {service.audienceIntro?.map((paragraph) => (
+                    <p key={paragraph}>{paragraph}</p>
+                  ))}
+                  {service.audience.length > 0 ? <CheckList items={service.audience} /> : null}
+                </DetailSection>
+                <DetailSection title="料金">
                   {service.price ? <p className="detail-price">{service.price}</p> : null}
                   {service.priceDetails?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                </>
-              )}
-              {service.priceItems && service.priceItems.length > 0 ? <CheckList items={service.priceItems} /> : null}
-            </DetailSection>
-            <DetailSection title="実施方法">
-              {service.slug === "life-career-coaching" ? (
-                <>
-                  <p>セッションはオンライン会議システムで実施します。初月は90分のトータルプランニングで現状・目標・優先行動を整理します。</p>
-                  <p>その後の面談回数、レビュー頻度、チャット対応は選択したプランにより異なります。実施日時と連絡方法は、お申し込み後に個別に調整します。</p>
-                </>
-              ) : (
-                <>
+                  {service.priceItems && service.priceItems.length > 0 ? <CheckList items={service.priceItems} /> : null}
+                </DetailSection>
+                <DetailSection title="実施方法">
                   {service.methodIntro?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
                   {service.methodItems && service.methodItems.length > 0 ? <CheckList items={service.methodItems} /> : null}
                   {service.method.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                </>
-              )}
-            </DetailSection>
+                </DetailSection>
+              </>
+            ) : null}
             {service.slug === "tarot-card-reading" ? (
               <>
                 <section className="detail-section tarot-email-section" aria-labelledby="tarot-email-title">

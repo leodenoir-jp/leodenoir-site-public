@@ -10,7 +10,6 @@ const plans = [
     price: "30,000",
     term: "初月",
     direction: "今の自分を知り、まず動き出す",
-    sessions: "60分 × 月2回",
     planning: "初期行動計画",
     review: "隔週",
     chat: "週1件まで",
@@ -18,10 +17,9 @@ const plans = [
     audience: "新規・初月だけ",
     totalPlanning: "初回90分",
     regularSessions: "月2回",
-    additionalSessions: "なし",
     reviewDetail: "2週間に1回",
     horizon: "最初の30〜90日",
-    planDetail: "直近の優先行動",
+    planDetail: "今の課題を整理し、最初の一歩を具体化",
     chatDetail: "週1件",
     strategy: "対象外"
   },
@@ -32,7 +30,6 @@ const plans = [
     price: "50,000",
     term: "月",
     direction: "3ヶ月先の変化を積み重ねる",
-    sessions: "60分 × 月4回",
     planning: "3ヶ月・フェーズ単位",
     review: "毎週",
     chat: "平日9〜17時",
@@ -40,10 +37,9 @@ const plans = [
     audience: "継続伴走",
     totalPlanning: "初回90分",
     regularSessions: "月4回",
-    additionalSessions: "なし",
     reviewDetail: "週1回",
     horizon: "おおむね3ヶ月",
-    planDetail: "フェーズ・課題管理",
+    planDetail: "段階ごとの目標と取り組みを設計",
     chatDetail: "平日対応",
     strategy: "対象外"
   },
@@ -54,25 +50,23 @@ const plans = [
     price: "75,000",
     term: "月",
     direction: "1年先の未来から、今を逆算する",
-    sessions: "60分 × 月4回 ＋ 30分 × 最大月4回",
     planning: "6〜12ヶ月・月別単位",
     review: "最大週2回",
     chat: "土日祝も対応・優先返信",
     cta: "集中的に取り組む",
     audience: "集中伴走",
     totalPlanning: "初回90分",
-    regularSessions: "月4回",
-    additionalSessions: "30分 × 最大月4回",
+    regularSessions: "月最大8回",
     reviewDetail: "週最大2回",
     horizon: "6〜12ヶ月",
-    planDetail: "フェーズ＋月別計画＋週次行動",
+    planDetail: "長期目標を月別・週別の行動へ具体化",
     chatDetail: "土日祝対応・優先返信",
     strategy: "+5,000円／月"
   }
 ] as const;
 
 const cardFacts = [
-  ["面談", "sessions"],
+  ["60分面談", "regularSessions"],
   ["計画", "planning"],
   ["レビュー", "review"],
   ["チャット", "chat"]
@@ -82,10 +76,9 @@ const comparisonFacts = [
   ["対象", "audience"],
   ["トータルプランニング", "totalPlanning"],
   ["60分面談", "regularSessions"],
-  ["追加面談", "additionalSessions"],
   ["レビュー頻度", "reviewDetail"],
-  ["計画の時間軸", "horizon"],
-  ["計画の粒度", "planDetail"],
+  ["見据える期間", "horizon"],
+  ["行動プラン", "planDetail"],
   ["チャット", "chatDetail"],
   ["専用戦略書オプション", "strategy"]
 ] as const;

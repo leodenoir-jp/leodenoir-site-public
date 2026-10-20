@@ -1,4 +1,4 @@
-﻿export type ImportedLessonReview = {
+export type ImportedLessonReview = {
   id: string;
   studentName: string;
   rating: 5;
@@ -559,7 +559,101 @@ export const importedLessonReviews: ImportedLessonReview[] = [
         "comment":  "學到很多，老師也很好",
         "postedAt":  "8月 3, 2026",
         "status":  "approved"
-    }
+    },
+{
+    "id": "LR-070",
+    "studentName": "min",
+    "rating": 5,
+    "comment": "生徒の要望にしっかりと耳を傾けてくださるだけでなく、潜在的なニーズまで自ら汲み取って適切なサポートを提供してくれる、非常に素晴らしい先生です。どんなレベルの生徒にとっても、総合的にスキルアップを目指すなら間違いなくおすすめできる先生です。",
+    "postedAt": "9月 21, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-071",
+    "studentName": "min",
+    "rating": 5,
+    "comment": "安定なレッスンをありがとうございます。誰にでもこういうレッスンで穏やかに進歩できる思います。みんな是非おすすめします",
+    "postedAt": "10月 15, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-072",
+    "studentName": "min",
+    "rating": 5,
+    "comment": "いつも親切でレッスンの中に突然の質問でも答えてくれるのとてもありがたいです。先生ありがとうございました",
+    "postedAt": "10月 14, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-073",
+    "studentName": "min",
+    "rating": 5,
+    "comment": "いろんな質問を回答したり詳しく学生のニーズを聞いたりしてくれて本当にありがとうございます。数字の言葉をやっと覚えやすくなってちょこちょこ覚えていきます",
+    "postedAt": "9月 30, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-074",
+    "studentName": "Chen",
+    "rating": 5,
+    "comment": "これまでのレッスンを通じて、同世代の友人と話すときの柔らかいカジュアルな表現や、話を広げてキャッチボールのように会話を続けるコツをしっかり学ぶことができました\r\n\r\n以前よりも自然に自分の考えや具体例を伝えられるようになり、少しずつ成長を実感しています\r\nこれからは大学院進学を見据えて、より専門的で論理的な学術表現やディスカッションのスキルを身につけていきたいと考えています\r\n\r\n今後ともどうぞよろしくお願いいたします",
+    "postedAt": "9月 30, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-075",
+    "studentName": "陳",
+    "rating": 5,
+    "comment": "本日の総復習レッスン、そしてPhase 1の全日程をありがとうございました！\r\n普段はどうしても丁寧表現のほうが使い慣れているのですが、今回のレッスンを通して、カジュアル表現が持つ柔らかさや会話のテンポ、適切な距離感の取り方を以前よりも深く理解できるようになりました",
+    "postedAt": "9月 30, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-076",
+    "studentName": "Gary",
+    "rating": 5,
+    "comment": "会話の中で瞬時に言葉を組み立てて発話するスピードにはまだ課題を感じるものの、相槌や相手の発言へのリアクションなど、相手との対応力という面では確実に前進できたと実感しております",
+    "postedAt": "9月 30, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-077",
+    "studentName": "Terry",
+    "rating": 5,
+    "comment": "現状の能力把握にご協力いただき、誠にありがとうございました。詳細な分析のおかげで、今後の課題や強化すべき点が明確になりました。",
+    "postedAt": "9月 1, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-078",
+    "studentName": "Lan",
+    "rating": 5,
+    "comment": "FREE TALK給予很多提醒及細節修正，文法內容也有詳細的說明。\r\n在日語環境中接受日文教育，可以充份練習日文語感，獲益良多。",
+    "postedAt": "10月 10, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-079",
+    "studentName": "楊",
+    "rating": 5,
+    "comment": "毎回授業を受けるたびに感動でいっぱいになります。先生は本当に素晴らしいです〜",
+    "postedAt": "9月 3, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-080",
+    "studentName": "denise",
+    "rating": 5,
+    "comment": "Lep老師在上課時發現我會聽到單字就自行推論的對方日文的意思習慣，沒有完整聽完對方說的日文，因此會有意思落差的狀況發生，並針對我的習慣提供改善的課程方式讓我練習調整，近期在工作上我有感覺到自己開始調整自己的這個習慣，我覺得很有幫助，謝謝老師。",
+    "postedAt": "10月 18, 2026",
+    "status": "approved"
+  },
+  {
+    "id": "LR-081",
+    "studentName": "Steven Lin",
+    "rating": 5,
+    "comment": "感謝老師細心分析我回答問題的思維，讓我找出能力上不足的地方",
+    "postedAt": "9月 16, 2026",
+    "status": "approved"
+  }
 ];
-
-

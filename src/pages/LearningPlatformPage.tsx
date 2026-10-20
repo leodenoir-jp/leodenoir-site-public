@@ -2,6 +2,7 @@
 import type { Route } from "../App";
 import { handleNav } from "../components/Layout";
 import { Seo } from "../components/Seo";
+import { LessonReviewText } from "../components/LessonReviewText";
 import { BusyCalendarSlot, getBusySlotsForDate, type BusySlot } from "../components/BusyCalendarSlots";
 import { AvailabilityCalendarLegend, CalendarDayEntries } from "../components/CalendarDayEntries";
 import { getPaymentPricingBreakdown } from "../config/paymentPricing";
@@ -1913,7 +1914,7 @@ function LessonReviewPage({
         </div>
         <div className="review-grid">
           {approvedReviews.length > 0 ? approvedReviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
+            <ReviewCard key={review.id} review={review} language={language} />
           )) : <p className="platform-muted">{text.noReviews}</p>}
         </div>
       </section>
@@ -1922,13 +1923,13 @@ function LessonReviewPage({
   );
 }
 
-function ReviewCard({ review }: { review: LessonReview }) {
+function ReviewCard({ review, language }: { review: LessonReview; language: PlatformLanguage }) {
   return (
     <article className="review-card">
       <div className="review-stars" aria-label={`${review.rating} stars`}>
         {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
       </div>
-      <p>{review.comment}</p>
+      <LessonReviewText key={`${review.id}-${language}`} id={review.id} comment={review.comment} language={language} />
       <footer>
         <strong>{review.studentName}</strong>
         <span>{formatDateTime(review.postedAt)}</span>
@@ -3080,7 +3081,7 @@ function TutorAvailabilityPage({
         <div className="review-grid">
           {pendingReviews.length > 0 ? pendingReviews.map((review) => (
             <div className="review-card-pending" key={review.id}>
-              <ReviewCard review={review} />
+              <ReviewCard review={review} language={language} />
               <button className="button primary" type="button" onClick={() => publishReview(review.id)}>
                 掲載する
               </button>

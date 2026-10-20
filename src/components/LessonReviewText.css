@@ -1,0 +1,40 @@
+.lesson-review-language {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.lesson-review-language select {
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  color: inherit;
+  background: #fff;
+  border: 1px solid #bccbd6;
+  border-radius: 4px;
+}
+
+.lesson-review-translation-label {
+  font-size: 12px;
+  color: #52647a;
+}
+
+.review-card .lesson-review-body {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.lesson-review-original {
+  margin: 12px 0;
+  border-top: 1px solid #dce3e9;
+  padding-top: 10px;
+}
+
+.lesson-review-original summary {
+  cursor: pointer;
+  font-size: 13px;
+}

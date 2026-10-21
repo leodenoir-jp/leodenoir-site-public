@@ -43,7 +43,7 @@ export const defaultGuidance = `当セッションはカウンセリングを中
 
 【ご予約前のご案内】
 ・1時間以上をご希望の場合は、まず1枠をご予約のうえ、仮確定メールへの返信でご希望時間をお知らせください
-・お支払い方法はPayPalまたはPayPayです`;
+・お支払い方法はPayPayです`;
 
 export const defaultTemplates = {
   provisional: `{{name}} 様
@@ -56,7 +56,7 @@ export const defaultTemplates = {
 所要時間：50分
 料金：9,000円
 
-内容を確認後、PayPalまたはPayPayの決済方法をメールにてご案内します。
+内容を確認後、PayPayの決済方法をメールにてご案内します。
 決済確認後に、Zoomリンクをお送りします。
 
 【キャンセルについて】

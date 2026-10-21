@@ -1388,7 +1388,7 @@ function PurchaseDialog({
   blockedStudents: string[];
   onClose: () => void;
 }) {
-  const [paymentMethod, setPaymentMethod] = useState<"PayPal" | "PayPay" | "BankTransfer">("PayPal");
+  const [paymentMethod, setPaymentMethod] = useState<"PayPay" | "BankTransfer">("PayPay");
   const [receiptRequested, setReceiptRequested] = useState(false);
   const [receiptName, setReceiptName] = useState(bookingForm.name);
   const [receiptEmail, setReceiptEmail] = useState(bookingForm.email);
@@ -1414,9 +1414,9 @@ function PurchaseDialog({
   const totalAmountLabel = formatPaymentMoney(totalPurchaseAmount, selectedMenu.currency);
   const totalPriceSummary = `${totalAmountLabel} / ${bookingForm.durationMinutes}分 x ${bookingForm.lessonCount}回`;
   const paymentMethodLabel = {
-    ja: { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "口座振込" },
-    en: { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "Bank transfer" },
-    "zh-Hant": { PayPal: "PayPal", PayPay: "PayPay", BankTransfer: "銀行轉帳" }
+    ja: { PayPay: "PayPay", BankTransfer: "口座振込" },
+    en: { PayPay: "PayPay", BankTransfer: "Bank transfer" },
+    "zh-Hant": { PayPay: "PayPay", BankTransfer: "銀行轉帳" }
   }[language][paymentMethod];
 
   const savePurchaseDraft = async () => {
@@ -1522,10 +1522,6 @@ function PurchaseDialog({
         <div className="platform-form">
           <fieldset className="payment-methods">
             <legend>支払い方法確認</legend>
-            <label>
-              <input type="radio" name="payment-method" checked={paymentMethod === "PayPal"} onChange={() => setPaymentMethod("PayPal")} disabled={purchaseSent} />
-              PayPal
-            </label>
             <label>
               <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => setPaymentMethod("PayPay")} disabled={purchaseSent} />
               PayPay
@@ -2013,7 +2009,7 @@ function TutorAvailabilityPage({
     quantity: 15,
     currency: "USD" as "USD" | "JPY",
     unitPrice: 28,
-    paymentMethod: "PayPal" as "PayPal" | "PayPay",
+    paymentMethod: "PayPay" as const,
     paymentLink: "",
     receiptRequested: true,
     receiptName: "",
@@ -3027,13 +3023,7 @@ function TutorAvailabilityPage({
           <div className="platform-grid two">
             <label>
               決済方法
-              <select value={purchaseOfferForm.paymentMethod} onChange={(event) => {
-                const paymentMethod = event.target.value as "PayPal" | "PayPay";
-                setPurchaseOfferForm({ ...purchaseOfferForm, paymentMethod });
-              }}>
-                <option value="PayPal">PayPal</option>
-                <option value="PayPay">PayPay</option>
-              </select>
+              <input value="PayPay" readOnly />
             </label>
             <label>
               決済リンク
@@ -4700,7 +4690,7 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
 
   if (["jp-intensive-interview", "jp-intensive-presentation", "jp-intensive-exhibition"].includes(menu.id)) {
     const shortDeadlinePrice = formatPaymentMoney(
-      getPaymentPricingBreakdown(35, "PayPal", "USD").finalCustomerPrice,
+      getPaymentPricingBreakdown(35, "PayPay", "USD").finalCustomerPrice,
       "USD"
     );
     const shortDeadlineNote = {
@@ -4941,7 +4931,7 @@ function groupMenusByCategory<T extends { category: string }>(menus: T[]) {
 function buildPriceSummary(menu: LessonMenu, deliveryMode: DeliveryMode, durationMinutes: number, lessonCount: number) {
   const multiplier = deliveryMode === "inPerson" ? 1.8 : 1;
   const baseTotal = calculateTotal(menu, durationMinutes, lessonCount, multiplier);
-  const sellingPrice = getPaymentPricingBreakdown(baseTotal, "PayPal", menu.currency).finalCustomerPrice;
+  const sellingPrice = getPaymentPricingBreakdown(baseTotal, "PayPay", menu.currency).finalCustomerPrice;
   return `${formatPaymentMoney(sellingPrice, menu.currency)} / ${durationMinutes}分 x ${lessonCount}回`;
 }
 
@@ -4950,7 +4940,7 @@ function calculateTotal(menu: LessonMenu, durationMinutes: number, lessonCount: 
 }
 
 function formatUnitPrice(menu: LessonMenu, multiplier = 1) {
-  const sellingPrice = getPaymentPricingBreakdown(menu.unitPrice * multiplier, "PayPal", menu.currency).finalCustomerPrice;
+  const sellingPrice = getPaymentPricingBreakdown(menu.unitPrice * multiplier, "PayPay", menu.currency).finalCustomerPrice;
   return `${formatPaymentMoney(sellingPrice, menu.currency)} / ${menu.unitMinutes}min.`;
 }
 

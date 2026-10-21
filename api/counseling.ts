@@ -15,6 +15,7 @@ import {
   type DateOverride,
   type WeeklyRule
 } from "./_lib/counseling.js";
+import { isPayPalPaymentLink } from "../shared/paymentMethods.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -385,7 +386,7 @@ async function saveAppointmentDetails(body: Record<string, unknown>, req: ApiReq
   const paymentMethod = cleanText(body.paymentMethod);
   const paymentLink = cleanText(body.paymentLink);
   const zoomLink = cleanText(body.zoomLink);
-  if (!appointmentId || !["PayPal", "PayPay"].includes(paymentMethod) || !paymentLink || !zoomLink) {
+  if (!appointmentId || paymentMethod !== "PayPay" || !paymentLink || isPayPalPaymentLink(paymentLink) || !zoomLink) {
     return res.status(400).json({ message: "Zoomリンクと決済情報を入力してください。" });
   }
   const serviceClient = await createServiceClient();
@@ -404,7 +405,7 @@ async function sendPaymentGuide(body: Record<string, unknown>, req: ApiRequest, 
   const serviceClient = await createServiceClient();
   const appointment = await findAppointment(serviceClient, cleanText(body.appointmentId));
   const client = appointment.counseling_clients;
-  if (!appointment.payment_method || !appointment.payment_link) {
+  if (appointment.payment_method !== "PayPay" || !appointment.payment_link || isPayPalPaymentLink(cleanText(appointment.payment_link))) {
     return res.status(400).json({ message: "先に決済情報を登録してください。" });
   }
   const settings = await loadSettings(serviceClient);

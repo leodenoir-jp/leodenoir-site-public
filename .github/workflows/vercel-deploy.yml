@@ -31,6 +31,9 @@ jobs:
       - name: Test tarot booking workflow
         run: pnpm run test:tarot
 
+      - name: Test payment methods and price parity
+        run: pnpm run test:payments
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 

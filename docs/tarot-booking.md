@@ -21,7 +21,7 @@ Prices are final tarot service prices. There is no payment-method surcharge. No 
 
 The counselor admin adds **タロット予約・相談**, **メール鑑定**, **タロット公開枠・案内文** tabs. Existing counseling tabs are unchanged.
 
-1. Save PayPal/PayPay link (and transportation where applicable). Save the online Zoom link against the shared client profile, not an individual purchase.
+1. Save the PayPay link (and transportation where applicable). Save the online Zoom link against the shared client profile, not an individual purchase.
 2. Send the payment instructions. Zoom is excluded at this stage.
 3. Confirm actual payment. The paid timestamp is persisted even if email delivery fails. Online confirmation includes Zoom; in-person confirmation includes agreed location.
 4. For email readings, payment confirmation queues intake guidance. Only a successful provider acceptance starts the seven-calendar-day reply window.

@@ -185,15 +185,15 @@ VercelのSupabase Integrationを使用している場合、ビルドはIntegrati
 
 ### 講師の空き枠・生徒別購入案内
 
-講師管理画面で登録した単日・定期の空き枠は、`availability_slots` に保存され、Student Pageの候補枠へ反映されます。購入案内では25分または50分、回数、単価、PayPalまたはPayPayの決済リンクを指定できます。単価はUSDでは0〜100ドル、JPYでは0〜30,000円（10,000円までは500円刻み、それ以降は1,000円刻み）で設定できます。講師が入金確認を実行すると、生徒の保有回数へ反映し、領収書希望時は領収書ファイルをメールへ添付します。
+講師管理画面で登録した単日・定期の空き枠は、`availability_slots` に保存され、Student Pageの候補枠へ反映されます。購入案内では25分または50分、回数、単価、PayPayの決済リンクを指定できます。単価はUSDでは0〜100ドル、JPYでは0〜30,000円（10,000円までは500円刻み、それ以降は1,000円刻み）で設定できます。講師が入金確認を実行すると、生徒の保有回数へ反映し、領収書希望時は領収書ファイルをメールへ添付します。
 
 Learning講師画面のログイン情報は、`LEARNING_TUTOR_LOGIN_EMAIL`と`LEARNING_TUTOR_LOGIN_PASSWORD`で管理します。署名用の`LEARNING_TUTOR_SESSION_SECRET`には、十分に長いランダムな値を設定してください。個別カウンセリング管理画面の`COUNSELING_ADMIN_*`とは分離されています。
 
-この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPal / PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
+この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
 
 ### 決済コストを考慮した販売価格
 
-Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割る逆算方式です。初期設定では `VITE_PAYPAL_VARIABLE_PROCESSING_RATE=0.041` を価格設計基準率として使用し、決済コスト調整後の価格に小数が生じた場合はUSD・JPYとも通貨の整数単位へ切り上げます。PayPalの固定手数料はこの計算に含めません。
+Learningの販売価格は、基準価格を `1 - 価格設計基準率` で割る逆算方式です。初期設定では従来の `VITE_PAYPAL_VARIABLE_PROCESSING_RATE=0.041` を価格設計基準率として維持し、決済コスト調整後の価格に小数が生じた場合はUSD・JPYとも通貨の整数単位へ切り上げます。この設定は販売価格の基準であり、PayPalを支払い方法として案内するものではありません。固定手数料はこの計算に含めません。
 
 顧客画面には決済手数料を別項目として表示せず、計算後の販売価格を表示します。現在の運用では販売価格は決済方法にかかわらず同一です。決済方法ごとの実際の変動率は、`VITE_PAYPAL_VARIABLE_PROCESSING_RATE`、`VITE_PAYPAY_VARIABLE_PROCESSING_RATE`、`VITE_BANK_TRANSFER_VARIABLE_PROCESSING_RATE` で個別に管理します。
 

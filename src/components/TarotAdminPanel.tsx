@@ -54,8 +54,8 @@ export function TarotAdminPanel({ token, view }: { token: string; view: "tarot" 
   </section>;
 }
 function TarotRequestEditor({ reading: r, pending, act }: { reading: Reading; pending: boolean; act: (body: Record<string, unknown>) => Promise<boolean> }) {
-  const [paymentMethod, setPaymentMethod] = useState(r.payment_method || "PayPal");
-  const [paymentLink, setPaymentLink] = useState(r.payment_link || "");
+  const paymentMethod = "PayPay";
+  const [paymentLink, setPaymentLink] = useState(r.payment_method === "PayPay" ? r.payment_link || "" : "");
   const [zoomLink, setZoomLink] = useState(r.counseling_clients.zoom_link || "");
   const [transportAmount, setTransport] = useState(r.transport_amount);
   const [text, setText] = useState("");
@@ -78,7 +78,7 @@ function TarotRequestEditor({ reading: r, pending, act }: { reading: Reading; pe
     {r.question ? <details><summary>受信した質問</summary><p className="tarot-preline">{r.question}</p></details> : null}
     <fieldset disabled={pending} className="tarot-admin-controls">
       {["pending_payment", "confirmed"].includes(r.status) ? <>
-        <div className="platform-grid three"><label>決済方法<select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}><option>PayPal</option><option>PayPay</option></select></label><label>決済リンク<input type="url" value={paymentLink} onChange={e => setPaymentLink(e.target.value)} /></label>{r.mode === "online" ? <label>Zoom会議リンク<input type="url" value={zoomLink} onChange={e => setZoomLink(e.target.value)} /></label> : r.mode === "in_person" ? <label>交通費（円）<input type="number" min={0} max={100000} step={1} value={transportAmount} onChange={e => setTransport(Number(e.target.value))} /></label> : null}</div>
+        <div className="platform-grid three"><label>決済方法<input value="PayPay" readOnly /></label><label>決済リンク<input type="url" value={paymentLink} onChange={e => setPaymentLink(e.target.value)} /></label>{r.mode === "online" ? <label>Zoom会議リンク<input type="url" value={zoomLink} onChange={e => setZoomLink(e.target.value)} /></label> : r.mode === "in_person" ? <label>交通費（円）<input type="number" min={0} max={100000} step={1} value={transportAmount} onChange={e => setTransport(Number(e.target.value))} /></label> : null}</div>
         <div className="button-row"><button className="button secondary" onClick={() => action("details", { paymentMethod, paymentLink, zoomLink, transportAmount })}>情報を保存</button>
         {r.status === "pending_payment" ? <><button className="button secondary" disabled={r.tarot_mail.some(m => m.kind === "payment")} onClick={() => { if (confirm("保存済みの決済情報で案内メールを送信しますか？")) action("payment"); }}>決済案内を送信</button><button className="button primary" onClick={() => { if (confirm("実際の入金を確認しましたか？入金済みとして記録し、案内メールを送信します。")) action("paid"); }}>入金確認・案内送信</button></> : null}</div>
       </> : null}

@@ -115,21 +115,21 @@ export const platformUi = {
   ja: {
     requestLesson: "予約リクエストを送る",
     dashboard: "受講者ダッシュボード",
-    notLivePayment: "購入希望の送信後、内容確認のうえPayPal、PayPayまたは口座振込の支払い案内をメールでお送りします。表示される販売価格は支払い方法にかかわらず同一です。口座振込の振込手数料は利用者負担となります。",
+    notLivePayment: "購入希望の送信後、内容確認のうえPayPayまたは口座振込の支払い案内をメールでお送りします。表示される販売価格は支払い方法にかかわらず同一です。口座振込の振込手数料は利用者負担となります。",
     timezone: "表示タイムゾーン",
     approvalRequired: "日程調整後にご案内"
   },
   en: {
     requestLesson: "Send booking request",
     dashboard: "Student dashboard",
-    notLivePayment: "After you send a purchase request, payment instructions for PayPal, PayPay, or bank transfer will be shared by email. The displayed selling price is the same for every payment method. Bank transfer fees are borne by the customer.",
+    notLivePayment: "After you send a purchase request, payment instructions for PayPay or bank transfer will be shared by email. The displayed selling price is the same for every payment method. Bank transfer fees are borne by the customer.",
     timezone: "Display timezone",
     approvalRequired: "Schedule details by email"
   },
   "zh-Hant": {
     requestLesson: "送出預約申請",
     dashboard: "學生儀表板",
-    notLivePayment: "送出購買申請後，將透過電子郵件提供 PayPal、PayPay 或銀行轉帳資訊。所有付款方式皆適用相同的顯示售價，銀行轉帳手續費由學生負擔。",
+    notLivePayment: "送出購買申請後，將透過電子郵件提供 PayPay 或銀行轉帳資訊。所有付款方式皆適用相同的顯示售價，銀行轉帳手續費由學生負擔。",
     timezone: "顯示時區",
     approvalRequired: "日程確認後以郵件通知"
   }

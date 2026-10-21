@@ -96,7 +96,7 @@ const fallbackPublicGuidance = `当セッションはカウンセリングを中
 
 【ご予約前のご案内】
 ・1時間以上をご希望の場合は、まず1枠をご予約のうえ、仮確定メールへの返信でご希望時間をお知らせください
-・お支払い方法はPayPalまたはPayPayです`;
+・お支払い方法はPayPayです`;
 
 export function CounselingBookingPage({ route }: { route: Route }) {
   return route.path === "/counseling/admin"
@@ -131,8 +131,8 @@ function createMockAdminData(): CounselingAdminData {
     reserved_until: new Date(startsAt.getTime() + 80 * 60_000).toISOString(),
     timezone: "Asia/Tokyo",
     status,
-    payment_method: status === "pending_payment" ? null : "PayPal",
-    payment_link: status === "pending_payment" ? "" : "https://example.com/paypal-demo",
+    payment_method: status === "pending_payment" ? null : "PayPay",
+    payment_link: status === "pending_payment" ? "" : "https://example.com/paypay-demo",
     paid_at: status === "confirmed" ? new Date().toISOString() : null,
     payment_sent_at: status === "pending_payment" ? null : new Date().toISOString(),
     confirmation_sent_at: status === "confirmed" ? new Date().toISOString() : null,
@@ -180,7 +180,7 @@ function createMockAdminData(): CounselingAdminData {
         { date: toLocalDateKey(confirmedDate), enabled: false, start: "10:00", end: "18:00" }
       ],
       public_guidance: fallbackPublicGuidance,
-      provisional_template: "{{name}} 様\n\n個別カウンセリングへお申し込みいただき、ありがとうございます。\n次の日程を仮確定として承りました。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\n所要時間：50分\n料金：9,000円\n\n内容を確認後、PayPalまたはPayPayの決済方法をメールにてご案内します。\n決済確認後に、Zoomリンクをお送りします。\n\n【キャンセルについて】\n・決済完了後、または開始12時間前を過ぎてからの相談者さま都合によるキャンセルは返金対象外です。\n・開始12時間前までのキャンセルは返金可能です。\n・返金時は、振込先情報または支払いコードをこのメールへの返信でお知らせください。\n\n当日は、顔出し・声出しともに任意です。声出しが難しい場合はZoomチャットもご利用いただけます。",
+      provisional_template: "{{name}} 様\n\n個別カウンセリングへお申し込みいただき、ありがとうございます。\n次の日程を仮確定として承りました。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\n所要時間：50分\n料金：9,000円\n\n内容を確認後、PayPayの決済方法をメールにてご案内します。\n決済確認後に、Zoomリンクをお送りします。\n\n【キャンセルについて】\n・決済完了後、または開始12時間前を過ぎてからの相談者さま都合によるキャンセルは返金対象外です。\n・開始12時間前までのキャンセルは返金可能です。\n・返金時は、振込先情報または支払いコードをこのメールへの返信でお知らせください。\n\n当日は、顔出し・声出しともに任意です。声出しが難しい場合はZoomチャットもご利用いただけます。",
       payment_template: "{{name}} 様\n\n個別カウンセリングのお支払い方法をご案内します。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nお支払い方法：{{paymentMethod}}\n決済リンク：{{paymentLink}}\n\n決済完了を確認後、予約確定メールにて、Zoomリンクをお送りします。",
       confirmation_template: "{{name}} 様\n\nご入金を確認しました。個別カウンセリングの予約が確定しました。\n以下の通り、当日のZoomリンクをお知らせします。\n\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nZoomリンク：{{zoomLink}}\n\n開始時間になりましたら、上記リンクからご参加ください。",
       reminder_template: "{{name}} 様\n\n個別カウンセリング開始18時間前のリマインドです。\n予約ID：{{bookingId}}\n日時：{{dateTime}}\nZoomリンク：{{zoomLink}}",
@@ -409,7 +409,7 @@ function CounselorAdminPage() {
   const [adminSlots, setAdminSlots] = useState<CounselingSlot[]>([]);
   const [reservations, setReservations] = useState<CalendarReservation[]>([]);
   const [overrideDraft, setOverrideDraft] = useState<DateOverride>({ date: "", enabled: true, start: "10:00", end: "18:00" });
-  const [detailDrafts, setDetailDrafts] = useState<Record<string, { zoomLink: string; paymentMethod: "PayPal" | "PayPay"; paymentLink: string; cancellationReason: string }>>({});
+  const [detailDrafts, setDetailDrafts] = useState<Record<string, { zoomLink: string; paymentMethod: "PayPay"; paymentLink: string; cancellationReason: string }>>({});
 
   const setAdminData = (body: CounselingAdminData) => {
     setSettings(body.settings);
@@ -418,8 +418,8 @@ function CounselorAdminPage() {
     setReservations(body.reservations);
     setDetailDrafts(Object.fromEntries(body.appointments.map((appointment) => [appointment.id, {
       zoomLink: appointment.counseling_clients.zoom_link ?? "",
-      paymentMethod: appointment.payment_method ?? "PayPal",
-      paymentLink: appointment.payment_link ?? "",
+      paymentMethod: "PayPay",
+      paymentLink: appointment.payment_method === "PayPay" ? appointment.payment_link ?? "" : "",
       cancellationReason: appointment.cancellation_reason ?? ""
     }])));
   };
@@ -655,7 +655,7 @@ function CounselorAdminPage() {
             />
             <div className="counseling-appointment-list">
               {appointments.map((appointment) => {
-                const draft = detailDrafts[appointment.id] ?? { zoomLink: "", paymentMethod: "PayPal" as const, paymentLink: "", cancellationReason: "" };
+                const draft = detailDrafts[appointment.id] ?? { zoomLink: "", paymentMethod: "PayPay" as const, paymentLink: "", cancellationReason: "" };
                 return (
                   <article className={`counseling-appointment ${appointment.status}`} key={appointment.id}>
                     <div className="counseling-appointment-head">
@@ -665,7 +665,7 @@ function CounselorAdminPage() {
                     <p>{appointment.counseling_clients.display_name} / {appointment.counseling_clients.email} / {appointment.counseling_clients.client_id}</p>
                     <div className="platform-grid three">
                       <label>Zoomリンク<input type="url" value={draft.zoomLink} onChange={(event) => setDetailDrafts({ ...detailDrafts, [appointment.id]: { ...draft, zoomLink: event.target.value } })} /></label>
-                      <label>決済方法<select value={draft.paymentMethod} onChange={(event) => setDetailDrafts({ ...detailDrafts, [appointment.id]: { ...draft, paymentMethod: event.target.value as "PayPal" | "PayPay" } })}><option>PayPal</option><option>PayPay</option></select></label>
+                      <label>決済方法<input value="PayPay" readOnly /></label>
                       <label>決済リンク<input type="url" value={draft.paymentLink} onChange={(event) => setDetailDrafts({ ...detailDrafts, [appointment.id]: { ...draft, paymentLink: event.target.value } })} /></label>
                     </div>
                     <div className="button-row compact">

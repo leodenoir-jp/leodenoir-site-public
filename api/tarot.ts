@@ -2,6 +2,7 @@ import holiday from "@holiday-jp/holiday_jp";
 import { assertCounselor, cleanText, counselorEmail, createServiceClient, formatJstDateTime, getBearerToken, normalizeBody, sendCounselingEmail } from "./_lib/counseling.js";
 import { defaultTarotSettings, jstDate, tarotModes, tarotPrices, tarotSlots, tokyoWards, validateSettings, type TarotMode, type TarotSettings } from "../shared/tarot.js";
 import { tarotExcludedTopics } from "../src/data/tarotTerms.js";
+import { isPayPalPaymentLink } from "../shared/paymentMethods.js";
 
 type Request = { method?: string; query?: Record<string, string | string[] | undefined>; headers?: Record<string, string | string[] | undefined>; body?: unknown };
 type Response = { setHeader(name: string, value: string): void; status(code: number): { json(body: unknown): void } };
@@ -169,7 +170,7 @@ export default async function handler(req: Request, res: Response) {
       }
       case "details": {
         state("pending_payment", "confirmed");
-        check(["PayPal", "PayPay"].includes(cleanText(body.paymentMethod)), "決済方法を選択してください。");
+        check(cleanText(body.paymentMethod) === "PayPay" && !isPayPalPaymentLink(cleanText(body.paymentLink)), "PayPayの決済リンクを入力してください。");
         patch.payment_method = body.paymentMethod;
         patch.payment_link = paymentUrl(body.paymentLink);
         const transport = Number(body.transportAmount ?? 0);
@@ -183,7 +184,7 @@ export default async function handler(req: Request, res: Response) {
         break;
       }
       case "payment":
-        state("pending_payment"); check(r.payment_link && r.payment_method, "先に決済情報を保存してください。");
+        state("pending_payment"); check(r.payment_method === "PayPay" && r.payment_link && !isPayPalPaymentLink(r.payment_link), "先にPayPayの決済情報を保存してください。");
         mail("payment", "タロット鑑定のお支払い案内", `鑑定料：${r.amount.toLocaleString("ja-JP")}円\n${r.mode === "in_person" ? `交通費：${r.transport_amount.toLocaleString("ja-JP")}円\n` : ""}合計：${(r.amount + r.transport_amount).toLocaleString("ja-JP")}円\nお支払い方法：${r.payment_method}\n決済リンク：${r.payment_link}\n入金確認後、${r.mode === "email" ? "ご相談内容の案内" : "予約確定のご案内"}をお送りします。`); break;
       case "paid":
         state("pending_payment"); check(r.payment_link, "決済情報を保存し、入金を確認してください。");

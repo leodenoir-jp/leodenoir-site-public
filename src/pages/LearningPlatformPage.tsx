@@ -1389,6 +1389,7 @@ function PurchaseDialog({
   onClose: () => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<"PayPay" | "BankTransfer">("PayPay");
+  const [paymentCurrency, setPaymentCurrency] = useState<"USD" | "JPY">("USD");
   const [receiptRequested, setReceiptRequested] = useState(false);
   const [receiptName, setReceiptName] = useState(bookingForm.name);
   const [receiptEmail, setReceiptEmail] = useState(bookingForm.email);
@@ -1448,6 +1449,7 @@ function PurchaseDialog({
       `時間: ${bookingForm.durationMinutes}${text.minutes}`,
       `購入回数: ${bookingForm.lessonCount}${text.lessons}`,
       `販売価格: ${totalPriceSummary}`,
+      selectedMenu.currency === "USD" ? `支払い通貨: ${paymentCurrency === "JPY" ? "日本円（円建て希望、請求額は決済案内時に確定）" : "米ドル"}` : "",
       paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
       `支払い方法: ${paymentMethodLabel}`,
       `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
@@ -1481,6 +1483,7 @@ function PurchaseDialog({
         `Variable Processing Rate / 変動決済率: ${(pricingBreakdown.variableProcessingRate * 100).toFixed(4)}%`,
         `Pricing Reference Rate / 価格設計基準率: ${(pricingBreakdown.pricingReferenceRate * 100).toFixed(4)}%`,
         `Final Customer Price / 最終販売価格: ${totalPriceSummary}`,
+        selectedMenu.currency === "USD" ? `支払い通貨: ${paymentCurrency === "JPY" ? "日本円（円建て希望。案内送信日の三井住友銀行公表・米ドルTTSで換算）" : "米ドル"}` : "",
         paymentMethod === "BankTransfer" ? "振込手数料: 利用者負担" : "",
         `領収書発行希望: ${receiptRequested ? "あり" : "なし"}`,
         receiptRequested ? `領収書宛名: ${receiptName || "未入力"}` : "",
@@ -1531,6 +1534,22 @@ function PurchaseDialog({
               {receiptCopy.bankTransfer}
             </label>
           </fieldset>
+          {selectedMenu.currency === "USD" ? (
+            <fieldset className="payment-methods">
+              <legend>支払い通貨</legend>
+              <label>
+                <input type="radio" name="payment-currency" checked={paymentCurrency === "USD"} onChange={() => setPaymentCurrency("USD")} disabled={purchaseSent} />
+                米ドルで支払う
+              </label>
+              <label>
+                <input type="radio" name="payment-currency" checked={paymentCurrency === "JPY"} onChange={() => setPaymentCurrency("JPY")} disabled={purchaseSent} />
+                日本円で支払う
+              </label>
+            </fieldset>
+          ) : null}
+          {selectedMenu.currency === "USD" && paymentCurrency === "JPY" ? (
+            <p className="platform-note">表示額は米ドル建ての販売価格です。円の請求額は、講師が支払い案内を送る日に三井住友銀行が公表する米ドルTTS（円から米ドルに替える際のレート）で試算し、案内メールでお知らせします。</p>
+          ) : null}
           {paymentMethod === "BankTransfer" ? <p className="platform-note">{receiptCopy.bankTransferFeeNotice}</p> : null}
           <label>
             表示名
@@ -1551,7 +1570,7 @@ function PurchaseDialog({
             </label>
           ) : null}
         </div>
-        {receiptRequested ? (
+        {receiptRequested && !(selectedMenu.currency === "USD" && paymentCurrency === "JPY") ? (
           <section className="receipt-preview" aria-label={receiptCopy.title}>
             <div>
               <p className="eyebrow">{receiptCopy.badge}</p>
@@ -1606,6 +1625,9 @@ function PurchaseDialog({
             </dl>
             <p>{receiptCopy.note}</p>
           </section>
+        ) : null}
+        {receiptRequested && selectedMenu.currency === "USD" && paymentCurrency === "JPY" ? (
+          <p className="platform-note">円払いの領収書金額は、決済案内時の換算額と入金確認後に確定します。</p>
         ) : null}
         <p className="platform-note">{receiptCopy.paymentNotice}</p>
         <div className="modal-actions">
@@ -2887,6 +2909,7 @@ function TutorAvailabilityPage({
         <p className="eyebrow">Student Purchase Offer</p>
         <h3>生徒別購入案内</h3>
         <p className="platform-muted">25分または50分のレッスン、回数、単価、決済リンクを指定して生徒へ購入案内を送信します。入金確認後はパッケージへ反映し、領収書希望者には領収書ファイルをメール添付します。</p>
+        <p className="platform-note">米ドル表示のサービスを日本円で支払いたい生徒には、このフォームからUSDの案内を送らず、送信日の三井住友銀行公表・米ドルTTSを確認して円額を個別メールで案内してください。このフォームは為替換算と円建て領収書の自動発行には未対応です。</p>
         {!purchaseOffersReady ? <p className="form-error">購入案内を利用するには、更新後の supabase/schema.sql をSupabase SQL Editorで実行してください。空き枠登録はこのまま利用できます。</p> : null}
         <form className="platform-form nested-form" onSubmit={sendPurchaseOffer}>
           <div className="platform-grid two">
@@ -4707,9 +4730,9 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
 function getLessonRuleCopy(language: PlatformLanguage, lessonKind: LessonKind) {
   const priceRule = lessonKind === "japanese"
     ? {
-        ja: "日本語レッスンは米ドル表記です。レッスン購入時点のレートに基づき請求いたします",
-        en: "Japanese lessons are shown in USD and billed based on the exchange rate at the time of purchase.",
-        "zh-Hant": "日語課以美元標示，依購買課程當時的匯率請款。"
+        ja: "日本語レッスンは米ドル表記です。日本円での支払いを希望する場合は、講師が支払い案内を送る日に三井住友銀行が公表する米ドルTTS（円から米ドルに替える際のレート）で試算した円額をご案内します。",
+        en: "Japanese lessons are priced in USD. If you request payment in JPY, the tutor will quote a yen amount using SMBC's published USD TTS rate (yen to US dollars) on the day payment instructions are sent.",
+        "zh-Hant": "日語課程以美元標價。如希望以日圓付款，講師會依寄送付款通知當日三井住友銀行公布的美元TTS匯率（日圓兌美元）試算並通知日圓金額。"
       }
     : {
         ja: "英語発音コーチングは日本円表記です。購入時点の条件に基づき請求いたします",

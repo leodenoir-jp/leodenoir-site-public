@@ -1,4 +1,4 @@
-import { isPayPalPaymentLink } from "../shared/paymentMethods.js";
+import { isPayPalPaymentLink, isPaymentCurrencySupported } from "../shared/paymentMethods.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -948,7 +948,7 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   const receiptRequested = body.receiptRequested === true;
   const receiptName = cleanText(body.receiptName);
   const displayLanguage = cleanText(body.displayLanguage) === "en" ? "en" : cleanText(body.displayLanguage) === "zh-Hant" ? "zh-Hant" : "ja";
-  if (!emailPattern.test(email) || !lessonMenuId || !packageLabel || quantity < 1 || quantity > 100 || !Number.isFinite(unitPrice) || unitPrice < 0 || (currency === "USD" && unitPrice > 100) || (currency === "JPY" && unitPrice > 30_000) || paymentMethod !== "PayPay" || !/^https:\/\//i.test(paymentLink) || isPayPalPaymentLink(paymentLink)) {
+  if (!emailPattern.test(email) || !lessonMenuId || !packageLabel || quantity < 1 || quantity > 100 || !Number.isFinite(unitPrice) || unitPrice < 0 || (currency === "USD" && unitPrice > 100) || (currency === "JPY" && unitPrice > 30_000) || paymentMethod !== "PayPay" || !isPaymentCurrencySupported(paymentMethod, currency) || !/^https:\/\//i.test(paymentLink) || isPayPalPaymentLink(paymentLink)) {
     return res.status(400).json({ message: "生徒情報、パッケージ内容、決済リンクを確認してください。" });
   }
   const serviceClient = await createServiceClient();

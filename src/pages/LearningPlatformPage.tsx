@@ -1389,7 +1389,7 @@ function PurchaseDialog({
   onClose: () => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<"PayPay" | "BankTransfer">("PayPay");
-  const [paymentCurrency, setPaymentCurrency] = useState<"USD" | "JPY">("USD");
+  const [paymentCurrency, setPaymentCurrency] = useState<"USD" | "JPY">("JPY");
   const [receiptRequested, setReceiptRequested] = useState(false);
   const [receiptName, setReceiptName] = useState(bookingForm.name);
   const [receiptEmail, setReceiptEmail] = useState(bookingForm.email);
@@ -1526,7 +1526,10 @@ function PurchaseDialog({
           <fieldset className="payment-methods">
             <legend>支払い方法確認</legend>
             <label>
-              <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => setPaymentMethod("PayPay")} disabled={purchaseSent} />
+              <input type="radio" name="payment-method" checked={paymentMethod === "PayPay"} onChange={() => {
+                setPaymentMethod("PayPay");
+                setPaymentCurrency("JPY");
+              }} disabled={purchaseSent} />
               PayPay
             </label>
             <label>
@@ -1538,14 +1541,17 @@ function PurchaseDialog({
             <fieldset className="payment-methods">
               <legend>支払い通貨</legend>
               <label>
-                <input type="radio" name="payment-currency" checked={paymentCurrency === "USD"} onChange={() => setPaymentCurrency("USD")} disabled={purchaseSent} />
-                米ドルで支払う
+                <input type="radio" name="payment-currency" checked={paymentCurrency === "USD"} onChange={() => setPaymentCurrency("USD")} disabled={purchaseSent || paymentMethod === "PayPay"} />
+                米ドルで支払う（口座振込のみ）
               </label>
               <label>
                 <input type="radio" name="payment-currency" checked={paymentCurrency === "JPY"} onChange={() => setPaymentCurrency("JPY")} disabled={purchaseSent} />
                 日本円で支払う
               </label>
             </fieldset>
+          ) : null}
+          {selectedMenu.currency === "USD" && paymentMethod === "PayPay" ? (
+            <p className="platform-note">PayPayは日本円でのお支払いのみ対応しています。</p>
           ) : null}
           {selectedMenu.currency === "USD" && paymentCurrency === "JPY" ? (
             <p className="platform-note">表示額は米ドル建ての販売価格です。円の請求額は、講師が支払い案内を送る日に三井住友銀行が公表する米ドルTTS（円から米ドルに替える際のレート）で試算し、案内メールでお知らせします。</p>
@@ -2029,8 +2035,8 @@ function TutorAvailabilityPage({
     packageLabel: "1on1日本語レッスン 50分 特別パッケージ",
     durationMinutes: 50 as 25 | 50,
     quantity: 15,
-    currency: "USD" as "USD" | "JPY",
-    unitPrice: 28,
+    currency: "JPY" as "USD" | "JPY",
+    unitPrice: 5_000,
     paymentMethod: "PayPay" as const,
     paymentLink: "",
     receiptRequested: true,
@@ -2909,7 +2915,7 @@ function TutorAvailabilityPage({
         <p className="eyebrow">Student Purchase Offer</p>
         <h3>生徒別購入案内</h3>
         <p className="platform-muted">25分または50分のレッスン、回数、単価、決済リンクを指定して生徒へ購入案内を送信します。入金確認後はパッケージへ反映し、領収書希望者には領収書ファイルをメール添付します。</p>
-        <p className="platform-note">米ドル表示のサービスを日本円で支払いたい生徒には、このフォームからUSDの案内を送らず、送信日の三井住友銀行公表・米ドルTTSを確認して円額を個別メールで案内してください。このフォームは為替換算と円建て領収書の自動発行には未対応です。</p>
+        <p className="platform-note">PayPayの決済案内は日本円のみ対応します。米ドル表示のサービスを円で支払いたい生徒には、送信日の三井住友銀行公表・米ドルTTSを確認して円額を個別メールで案内してください。このフォームは為替換算と円建て領収書の自動発行には未対応です。</p>
         {!purchaseOffersReady ? <p className="form-error">購入案内を利用するには、更新後の supabase/schema.sql をSupabase SQL Editorで実行してください。空き枠登録はこのまま利用できます。</p> : null}
         <form className="platform-form nested-form" onSubmit={sendPurchaseOffer}>
           <div className="platform-grid two">
@@ -2975,7 +2981,7 @@ function TutorAvailabilityPage({
                   unitPrice: currency === "USD" ? 28 : 5_000
                 }));
               }}>
-                <option value="USD">USD</option>
+                <option value="USD" disabled>USD（PayPayでは選択不可）</option>
                 <option value="JPY">JPY</option>
               </select>
             </label>

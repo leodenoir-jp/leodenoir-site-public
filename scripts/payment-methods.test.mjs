@@ -19,7 +19,7 @@ async function load(entry, define = {}) {
   return module.exports;
 }
 
-const { isPayPalPaymentLink } = await load("shared/paymentMethods.ts");
+const { isPayPalPaymentLink, isPaymentCurrencySupported } = await load("shared/paymentMethods.ts");
 const { getPaymentPricingBreakdown } = await load("src/config/paymentPricing.ts", { "import.meta.env": "{}" });
 
 test("new payment links reject PayPal hosts without blocking PayPay", () => {
@@ -39,4 +39,11 @@ test("removing PayPal as a choice leaves the selling price unchanged", () => {
       );
     }
   }
+});
+
+test("PayPay purchase offers can be billed only in JPY", () => {
+  assert.equal(isPaymentCurrencySupported("PayPay", "JPY"), true);
+  assert.equal(isPaymentCurrencySupported("PayPay", "USD"), false);
+  assert.equal(isPaymentCurrencySupported("BankTransfer", "USD"), true);
+  assert.equal(isPaymentCurrencySupported("BankTransfer", "JPY"), true);
 });

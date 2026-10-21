@@ -8,3 +8,7 @@ export function isPayPalPaymentLink(value: string) {
     return false;
   }
 }
+
+export function isPaymentCurrencySupported(paymentMethod: string, currency: string) {
+  return paymentMethod !== "PayPay" || currency === "JPY";
+}

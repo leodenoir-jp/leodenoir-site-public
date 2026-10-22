@@ -246,7 +246,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "体験レッスン",
     description: "現在の日本語レベル、学習目的、課題を確認する初回向けレッスンです。",
     currency: "USD",
-    unitPrice: 12,
+    unitPrice: 17,
     unitMinutes: 25,
     durations: [25],
     purchaseCounts: [1]
@@ -257,7 +257,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "フリートークコース",
     description: "日常の話題を使い、自然な受け答え、語彙、言い換えを増やします。",
     currency: "USD",
-    unitPrice: 25,
+    unitPrice: 30,
     unitMinutes: 50,
     durations: [25, 50, 75],
     purchaseCounts: [1, 10, 20]
@@ -268,7 +268,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "日常会話コース",
     description: "生活場面で使う自然な受け答えや表現を、場面別に実践練習します。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -279,7 +279,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "日本旅行会話コース",
     description: "移動、飲食、買い物、宿泊など、日本旅行中に使う表現を実践練習します。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -290,7 +290,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "社内交渉トレーニング",
     description: "依頼、調整、反論、合意形成など、社内での交渉場面を練習します。",
     currency: "USD",
-    unitPrice: 35,
+    unitPrice: 40,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -301,7 +301,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "ビジネス会話（会議 / 報告 / 雑談 等）",
     description: "会議、報連相、雑談など、職場で自然に話すための表現を磨きます。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -312,7 +312,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "ビジネス作文",
     description: "メール、チャット、報告文など、読み手に伝わる文章を整えます。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -323,7 +323,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "ビジネスプレゼンテーション",
     description: "構成、説明、質疑応答まで、日本語で伝える力を実践的に練習します。",
     currency: "USD",
-    unitPrice: 35,
+    unitPrice: 40,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -334,7 +334,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "日本駐在準備",
     description: "赴任前後に必要な職場・生活・関係構築の日本語を準備します。",
     currency: "USD",
-    unitPrice: 35,
+    unitPrice: 40,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -345,11 +345,11 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "面接対策（ビジネス / 入試 / 資格受験）",
     description: "短期間で想定質問、回答構成、発音、自然な受け答えを整えます。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20],
-    note: "2週間以内の短期集中は 35 USD / 50min. を目安に個別相談"
+    note: "2週間以内の短期集中は 40 USD / 50min. を目安に個別相談"
   },
   {
     id: "jp-intensive-presentation",
@@ -357,11 +357,11 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "プレゼンテーション準備",
     description: "発表原稿、構成、質疑応答、話し方を期限から逆算して整えます。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20],
-    note: "2週間以内の短期集中は 35 USD / 50min. を目安に個別相談"
+    note: "2週間以内の短期集中は 40 USD / 50min. を目安に個別相談"
   },
   {
     id: "jp-intensive-exhibition",
@@ -369,11 +369,11 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "展示会準備",
     description: "来場者対応、商品説明、名刺交換、商談導入の日本語を練習します。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20],
-    note: "2週間以内の短期集中は 35 USD / 50min. を目安に個別相談"
+    note: "2週間以内の短期集中は 40 USD / 50min. を目安に個別相談"
   },
   {
     id: "jp-study-abroad",
@@ -381,7 +381,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "日本留学準備コース",
     description: "授業、生活、面接、学校手続きで必要になる日本語を準備します。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20],
@@ -393,7 +393,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "N5対策コース",
     description: "基礎文法、語彙、読解、聴解を無理なく積み上げます。",
     currency: "USD",
-    unitPrice: 25,
+    unitPrice: 30,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -404,7 +404,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "N4〜N2対策コース",
     description: "レベル別に弱点を整理し、問題演習と解説で得点力を高めます。",
     currency: "USD",
-    unitPrice: 30,
+    unitPrice: 35,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]
@@ -415,7 +415,7 @@ export const japaneseLessonMenus: LessonMenu[] = [
     name: "N1対策コース",
     description: "高度な語彙、読解、聴解を中心に、実戦的に対策します。",
     currency: "USD",
-    unitPrice: 35,
+    unitPrice: 40,
     unitMinutes: 50,
     durations: [50, 75],
     purchaseCounts: [1, 10, 20]

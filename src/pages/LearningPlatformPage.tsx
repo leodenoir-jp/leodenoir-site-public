@@ -4665,16 +4665,16 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
       "zh-Hant": { category: "商務實用日語", name: "日本派駐準備", description: "準備赴日前後職場、生活與建立關係所需的日語。" }
     },
     "jp-intensive-interview": {
-      en: { category: "Intensive Package within 3 months", name: "Interview Preparation (business / school / qualification)", description: "Work backward from the deadline to refine answers, structure, pronunciation, and natural responses.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月?短期集中方案", name: "面試準備（商務 / 入學 / 資格考試）", description: "依照期限整理預想問題、回答架構、發音與自然回應。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      en: { category: "Intensive Package within 3 months", name: "Interview Preparation (business / school / qualification)", description: "Work backward from the deadline to refine answers, structure, pronunciation, and natural responses.", note: "For intensive preparation within 2 weeks, 40 USD / 50min. is used as a guide." },
+      "zh-Hant": { category: "3個月?短期集中方案", name: "面試準備（商務 / 入學 / 資格考試）", description: "依照期限整理預想問題、回答架構、發音與自然回應。", note: "2週?短期集中以 40 USD / 50min. 為參考，個別討論。" }
     },
     "jp-intensive-presentation": {
-      en: { category: "Intensive Package within 3 months", name: "Presentation Preparation", description: "Refine script, structure, Q&A, and delivery from the deadline backward.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月?短期集中方案", name: "簡報準備", description: "依照期限整理發表稿、架構、問答與?話方式。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      en: { category: "Intensive Package within 3 months", name: "Presentation Preparation", description: "Refine script, structure, Q&A, and delivery from the deadline backward.", note: "For intensive preparation within 2 weeks, 40 USD / 50min. is used as a guide." },
+      "zh-Hant": { category: "3個月?短期集中方案", name: "簡報準備", description: "依照期限整理發表稿、架構、問答與?話方式。", note: "2週?短期集中以 40 USD / 50min. 為參考，個別討論。" }
     },
     "jp-intensive-exhibition": {
-      en: { category: "Intensive Package within 3 months", name: "Exhibition Preparation", description: "Practice visitor support, product explanations, business card exchange, and opening sales conversations.", note: "For intensive preparation within 2 weeks, 35 USD / 50min. is used as a guide." },
-      "zh-Hant": { category: "3個月?短期集中方案", name: "展覽會準備", description: "練習接待、商品?明、交換名片與商談開場的日語。", note: "2週?短期集中以 35 USD / 50min. 為參考，個別討論。" }
+      en: { category: "Intensive Package within 3 months", name: "Exhibition Preparation", description: "Practice visitor support, product explanations, business card exchange, and opening sales conversations.", note: "For intensive preparation within 2 weeks, 40 USD / 50min. is used as a guide." },
+      "zh-Hant": { category: "3個月?短期集中方案", name: "展覽會準備", description: "練習接待、商品?明、交換名片與商談開場的日語。", note: "2週?短期集中以 40 USD / 50min. 為參考，個別討論。" }
     },
     "jp-study-abroad": {
       en: { category: "Study Abroad Preparation", name: "Japan Study Abroad Preparation", description: "Prepare Japanese for classes, daily life, interviews, and school procedures.", note: "U20 discount available." },
@@ -4719,7 +4719,7 @@ function getMenuText(menu: LessonMenu, language: PlatformLanguage): MenuDisplayT
 
   if (["jp-intensive-interview", "jp-intensive-presentation", "jp-intensive-exhibition"].includes(menu.id)) {
     const shortDeadlinePrice = formatPaymentMoney(
-      getPaymentPricingBreakdown(35, "PayPay", "USD").finalCustomerPrice,
+      getPaymentPricingBreakdown(40, "PayPay", "USD").finalCustomerPrice,
       "USD"
     );
     const shortDeadlineNote = {

@@ -157,7 +157,7 @@ Vercelの Project Settings → Environment Variables に以下を設定してく
 - `PURCHASE_TO_EMAIL`: Learningの購入希望通知の受信先メールアドレス
 - `LEARNING_TUTOR_TO_EMAIL`: Learningの講師問い合わせ受信先メールアドレス。未設定時は既定の講師メールアドレスを使用
 
-送信先メールアドレス: `yu.leobiz003@outlook.com`
+送信先メールアドレス: `leobiz555@leodenoir.com`
 
 ## Supabase認証の設定
 
@@ -189,7 +189,7 @@ VercelのSupabase Integrationを使用している場合、ビルドはIntegrati
 
 Learning講師画面のログイン情報は、`LEARNING_TUTOR_LOGIN_EMAIL`と`LEARNING_TUTOR_LOGIN_PASSWORD`で管理します。署名用の`LEARNING_TUTOR_SESSION_SECRET`には、十分に長いランダムな値を設定してください。個別カウンセリング管理画面の`COUNSELING_ADMIN_*`とは分離されています。
 
-この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `yu.leobiz003@outlook.com`）へ完了通知を送ります。
+この機能を初めて公開する前に、`supabase/migrations/20260825_learning_purchase_offers.sql` をSupabase SQL Editorで実行してください。既存テーブルを残したまま、今回必要な購入案内テーブルとポリシーだけを追加できます。PayPayの決済完了を自動検知するWebhookは未接続です。現時点では、講師による入金確認を正式な確定操作とし、その操作時に `LEARNING_TUTOR_TO_EMAIL`（未設定時は `CONTACT_TO_EMAIL` または `leobiz555@leodenoir.com`）へ完了通知を送ります。
 
 ### 決済コストを考慮した販売価格
 

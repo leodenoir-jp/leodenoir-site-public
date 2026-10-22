@@ -2,7 +2,8 @@ declare const process: {
   env: Record<string, string | undefined>;
 };
 
-export const counselorEmail = "yu.leobiz003@outlook.com";
+const counselorAuthEmail = "yu.leobiz003@outlook.com";
+export const counselorEmail = process.env.CONTACT_TO_EMAIL || "leobiz555@leodenoir.com";
 export const counselingTimezone = "Asia/Tokyo";
 const counselingAdminSessionPrefix = "counseling-admin:";
 
@@ -202,7 +203,7 @@ export async function assertCounselor(token: string) {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { data, error } = await authClient.auth.getUser(token);
-  if (error || data.user?.email?.toLowerCase() !== counselorEmail) throw new Error("Unauthorized");
+  if (error || data.user?.email?.toLowerCase() !== counselorAuthEmail) throw new Error("Unauthorized");
   return data.user;
 }
 

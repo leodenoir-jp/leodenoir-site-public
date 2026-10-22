@@ -69,6 +69,7 @@ type PlannedBooking = {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ownerEmail = "yu.leobiz003@outlook.com";
+const tutorNotificationEmail = process.env.LEARNING_TUTOR_TO_EMAIL || process.env.CONTACT_TO_EMAIL || "leobiz555@leodenoir.com";
 const adminSessionPrefix = "learning-admin:";
 
 function cleanText(value: unknown) {
@@ -1003,7 +1004,7 @@ async function sendPurchaseOffer(body: Record<string, unknown>, req: ApiRequest,
   if (insertResult.error) throw insertResult.error;
   const offer = insertResult.data as PurchaseOfferRecord;
   const copy = purchaseOfferCopy(offer);
-  const tutorEmail = (process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail).trim().toLowerCase();
+  const tutorEmail = tutorNotificationEmail.trim().toLowerCase();
   try {
     await sendEmail({
       to: email,
@@ -1035,7 +1036,7 @@ function buildReceiptHtml(offer: PurchaseOfferRecord) {
       ? { title: "收據", recipient: "付款人", amount: "金額", service: "服務內容", method: "付款方式", date: "開立日期", issuer: "開立人", note: "上述款項已收訖。" }
       : { title: "領収書", recipient: "宛名", amount: "金額", service: "但し書き", method: "支払方法", date: "発行日", issuer: "発行者", note: "上記金額を正に領収いたしました。" };
   const serviceDescription = `${offer.package_label} ${offer.duration_minutes}分 × ${offer.quantity}回`;
-  return `<!doctype html><html lang="${offer.display_language}"><head><meta charset="utf-8"><title>${copy.title} ${offer.offer_id}</title><style>body{font-family:'Yu Gothic','游ゴシック',YuGothic,Meiryo,sans-serif;color:#111827;margin:48px}.receipt{max-width:760px;margin:auto;border:1px solid #94a3b8;padding:40px}.brand{color:#0f2742;font-size:14px}.title{text-align:center;font-size:30px;margin:18px 0 34px}.amount{font-size:24px;font-weight:700;border-bottom:2px solid #0f2742;padding:8px 0}dl{display:grid;grid-template-columns:150px 1fr;gap:12px;margin:30px 0}dt{color:#475569}dd{margin:0}.footer{margin-top:42px;border-top:1px solid #cbd5e1;padding-top:18px}.id{font-size:12px;color:#64748b}</style></head><body><main class="receipt"><p class="brand">Leo de Noir / Workaholic Owl</p><h1 class="title">${copy.title}</h1><p class="id">No. ${escapeHtml(offer.offer_id)}</p><dl><dt>${copy.recipient}</dt><dd>${escapeHtml(receiptName)}</dd><dt>${copy.amount}</dt><dd class="amount">${escapeHtml(total)}</dd><dt>${copy.service}</dt><dd>${escapeHtml(serviceDescription)}</dd><dt>${copy.method}</dt><dd>${escapeHtml(offer.payment_method)}</dd><dt>${copy.date}</dt><dd>${escapeHtml(new Date().toLocaleDateString(offer.display_language === "ja" ? "ja-JP" : offer.display_language === "zh-Hant" ? "zh-TW" : "en-US", { timeZone: "Asia/Tokyo" }))}</dd><dt>${copy.issuer}</dt><dd>Leo de Noir / Workaholic Owl<br>運営者：請井 悠貴子<br>${ownerEmail}</dd></dl><p>${copy.note}</p><div class="footer">https://leodenoir.com</div></main></body></html>`;
+  return `<!doctype html><html lang="${offer.display_language}"><head><meta charset="utf-8"><title>${copy.title} ${offer.offer_id}</title><style>body{font-family:'Yu Gothic','游ゴシック',YuGothic,Meiryo,sans-serif;color:#111827;margin:48px}.receipt{max-width:760px;margin:auto;border:1px solid #94a3b8;padding:40px}.brand{color:#0f2742;font-size:14px}.title{text-align:center;font-size:30px;margin:18px 0 34px}.amount{font-size:24px;font-weight:700;border-bottom:2px solid #0f2742;padding:8px 0}dl{display:grid;grid-template-columns:150px 1fr;gap:12px;margin:30px 0}dt{color:#475569}dd{margin:0}.footer{margin-top:42px;border-top:1px solid #cbd5e1;padding-top:18px}.id{font-size:12px;color:#64748b}</style></head><body><main class="receipt"><p class="brand">Leo de Noir / Workaholic Owl</p><h1 class="title">${copy.title}</h1><p class="id">No. ${escapeHtml(offer.offer_id)}</p><dl><dt>${copy.recipient}</dt><dd>${escapeHtml(receiptName)}</dd><dt>${copy.amount}</dt><dd class="amount">${escapeHtml(total)}</dd><dt>${copy.service}</dt><dd>${escapeHtml(serviceDescription)}</dd><dt>${copy.method}</dt><dd>${escapeHtml(offer.payment_method)}</dd><dt>${copy.date}</dt><dd>${escapeHtml(new Date().toLocaleDateString(offer.display_language === "ja" ? "ja-JP" : offer.display_language === "zh-Hant" ? "zh-TW" : "en-US", { timeZone: "Asia/Tokyo" }))}</dd><dt>${copy.issuer}</dt><dd>Leo de Noir / Workaholic Owl<br>運営者：請井 悠貴子<br>${tutorNotificationEmail}</dd></dl><p>${copy.note}</p><div class="footer">https://leodenoir.com</div></main></body></html>`;
 }
 
 async function markOfferPaid(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
@@ -1088,14 +1089,14 @@ async function markOfferPaid(body: Record<string, unknown>, req: ApiRequest, res
       : `${offer.package_label}の入金を確認しました。${offer.quantity}回分をアカウントへ反映しました。${offer.receipt_requested ? "領収書を添付しています。" : ""}`;
   await sendEmail({
     to: offer.students.email,
-    replyTo: process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail,
+    replyTo: tutorNotificationEmail,
     subject: offer.display_language === "en" ? "Payment confirmed" : offer.display_language === "zh-Hant" ? "付款確認完成" : "レッスンパッケージの入金を確認しました",
     text: studentText,
     html: renderEmailHtml(`<p>${escapeHtml(studentText)}</p>`),
     attachments: receiptHtml ? [{ filename: `receipt-${offer.offer_id}.html`, content: Buffer.from(receiptHtml, "utf8").toString("base64") }] : undefined
   });
   await sendEmail({
-    to: process.env.LEARNING_TUTOR_TO_EMAIL || ownerEmail,
+    to: tutorNotificationEmail,
     replyTo: offer.students.email,
     subject: "購入代金の入金確認が完了しました",
     text: `購入案内ID: ${offer.offer_id}\n生徒: ${offer.students.name || ""} (${offer.students.email})\nパッケージ: ${offer.package_label}\n回数: ${offer.quantity}回\n合計: ${formatMoney(Number(offer.total_amount), offer.currency)}\n領収書: ${offer.receipt_requested ? "送信済み" : "希望なし"}`,

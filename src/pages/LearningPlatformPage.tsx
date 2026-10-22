@@ -7,6 +7,7 @@ import { BusyCalendarSlot, getBusySlotsForDate, type BusySlot } from "../compone
 import { AvailabilityCalendarLegend, CalendarDayEntries } from "../components/CalendarDayEntries";
 import { getPaymentPricingBreakdown } from "../config/paymentPricing";
 import { importedLessonReviews } from "../data/lessonReviews";
+import { siteConfig } from "../data/site";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
 import {
   type BookingRecord,
@@ -1621,7 +1622,7 @@ function PurchaseDialog({
                   Leo de Noir / Workaholic Owl<br />
                   Yukiko Ukei<br />
                   https://leodenoir.com<br />
-                  yu.leobiz003@outlook.com
+                  {siteConfig.contactEmail}
                 </dd>
               </div>
               <div>
@@ -2507,7 +2508,7 @@ function TutorAvailabilityPage({
     if (conflicts.length > 0) {
       await sendPlatformNotification({
         name: "Schedule overlap monitor",
-        email: ownerEmail,
+        email: siteConfig.contactEmail,
         inquiryType: "Learning予約枠重複アラート",
         subject: "予約枠の重複を検知しました",
         displayLanguage: language,

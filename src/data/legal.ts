@@ -220,7 +220,7 @@ export const legalPages: LegalPage[] = [
 事業者名：Leo de Noir / Workaholic Owl
 運営者名：請井 悠貴子（UKEI, Yukiko）
 公式サイト：https://leodenoir.com
-連絡先：yu.leobiz003@outlook.com
+連絡先：leobiz555@leodenoir.com
 
 制定日：2026年7月7日
 `)
@@ -373,7 +373,7 @@ export const legalPages: LegalPage[] = [
       { type: "paragraph", text: "事業者名：Leo de Noir / Workaholic Owl" },
       { type: "paragraph", text: "運営者名：請井 悠貴子" },
       { type: "paragraph", text: "公式サイト：https://leodenoir.com" },
-      { type: "paragraph", text: "メールアドレス：yu.leobiz003@outlook.com" },
+      { type: "paragraph", text: "メールアドレス：leobiz555@leodenoir.com" },
       { type: "paragraph", text: "制定日：2026年7月7日" }
     ]
   },
@@ -391,7 +391,7 @@ export const legalPages: LegalPage[] = [
       { type: "heading", text: "電話番号" },
       { type: "paragraph", text: "請求があった場合には、遅滞なく開示いたします。" },
       { type: "heading", text: "メールアドレス" },
-      { type: "paragraph", text: "yu.leobiz003@outlook.com" },
+      { type: "paragraph", text: "leobiz555@leodenoir.com" },
       { type: "heading", text: "公式サイト" },
       { type: "paragraph", text: "https://leodenoir.com" },
       { type: "heading", text: "販売価格・役務の対価" },

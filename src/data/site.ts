@@ -6,7 +6,7 @@ export const siteConfig = {
   organization: "Workaholic Owl",
   operator: "請井 悠貴子",
   url: "https://leodenoir.com",
-  contactEmail: "yu.leobiz003@outlook.com",
+  contactEmail: "leobiz555@leodenoir.com",
   description:
     "Leo de Noir / Workaholic Owl は、個人と組織が自分の役割を見つめ、自ら人生や働き方の舵を取るための、対話・教育・実務支援・表現活動の公式窓口です。",
   snsLinks: [

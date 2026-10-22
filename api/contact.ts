@@ -29,7 +29,7 @@ type ContactPayload = {
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const defaultLearningTutorEmail = "yu.leobiz003@outlook.com";
+const defaultContactEmail = "leobiz555@leodenoir.com";
 
 function toText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -143,9 +143,9 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
   const copyMessage = toText(body.copyMessage);
   const recipientGroup = toText(body.recipientGroup);
   const displayLanguage = formatDisplayLanguage(toText(body.displayLanguage));
-  const contactToEmail = process.env.CONTACT_TO_EMAIL || process.env.LEARNING_TUTOR_TO_EMAIL || defaultLearningTutorEmail;
+  const contactToEmail = process.env.CONTACT_TO_EMAIL || process.env.LEARNING_TUTOR_TO_EMAIL || defaultContactEmail;
   const purchaseToEmail = process.env.PURCHASE_TO_EMAIL;
-  const learningTutorEmail = process.env.LEARNING_TUTOR_TO_EMAIL || defaultLearningTutorEmail;
+  const learningTutorEmail = process.env.LEARNING_TUTOR_TO_EMAIL || contactToEmail;
 
   if (!name || !email || !inquiryType || !message) {
     return res.status(400).json({ message: "Required fields are missing." });
@@ -178,7 +178,7 @@ export default async function handler(req: ContactRequest, res: ContactResponse)
     return res.status(500).json({ message: "Recipient email address is invalid." });
   }
 
-  const ownerRecipient = recipientEmail.toLowerCase() === defaultLearningTutorEmail
+  const ownerRecipient = recipientEmail.toLowerCase() === defaultContactEmail
     || (contactToEmail ? recipientEmail.toLowerCase() === contactToEmail.toLowerCase() : false);
   const subject = requestedSubject || "お問い合わせがありました";
   const text = [

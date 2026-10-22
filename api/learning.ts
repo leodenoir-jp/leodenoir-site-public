@@ -338,11 +338,12 @@ async function listAvailability(res: ApiResponse) {
 async function listAdmin(req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const serviceClient = await createServiceClient();
-  const [slotsResult, offersResult, initialStudentsResult, bookingsResult] = await Promise.all([
+  const [slotsResult, offersResult, initialStudentsResult, bookingsResult, reviewsResult] = await Promise.all([
     serviceClient.from("availability_slots").select("id,starts_at,ends_at,timezone,delivery_mode,note").order("starts_at", { ascending: true }),
     serviceClient.from("lesson_purchase_offers").select("*,students(id,student_id,email,name)").order("offered_at", { ascending: false }),
     serviceClient.from("students").select("id,student_id,email,name,zoom_link,lesson_packages(lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at)").order("created_at", { ascending: false }),
-    serviceClient.from("bookings").select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,students(student_id,email,name)").order("requested_slot", { ascending: true })
+    serviceClient.from("bookings").select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,students(student_id,email,name)").order("requested_slot", { ascending: true }),
+    serviceClient.from("lesson_reviews").select("id,student_name,student_email,rating,comment,status,posted_at").order("posted_at", { ascending: false })
   ]);
   let studentsResult = initialStudentsResult;
   if (studentsResult.error && /zoom_link/i.test(studentsResult.error.message)) {
@@ -367,14 +368,81 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
       message: studentsResult.error.message
     });
   }
+  if (reviewsResult.error) {
+    console.error("Learning reviews could not be loaded.", {
+      code: reviewsResult.error.code,
+      message: reviewsResult.error.message
+    });
+  }
   return res.status(200).json({
     slots: slotsResult.data ?? [],
     offers: purchaseOffersReady ? offersResult.data ?? [] : [],
     students: studentsReady ? studentsResult.data ?? [] : [],
     bookings: bookingsResult.data ?? [],
     purchaseOffersReady,
-    studentsReady
+    studentsReady,
+    reviews: reviewsResult.error ? [] : (reviewsResult.data ?? []).map(mapLessonReview),
+    reviewsReady: !reviewsResult.error
   });
+}
+
+function mapLessonReview(record: Record<string, unknown>) {
+  return {
+    id: String(record.id),
+    studentName: String(record.student_name),
+    studentEmail: typeof record.student_email === "string" ? record.student_email : undefined,
+    rating: Number(record.rating),
+    comment: String(record.comment),
+    postedAt: String(record.posted_at),
+    status: String(record.status)
+  };
+}
+
+async function listApprovedReviews(res: ApiResponse) {
+  const serviceClient = await createServiceClient();
+  const { data, error } = await serviceClient.from("lesson_reviews")
+    .select("id,student_name,rating,comment,status,posted_at")
+    .eq("status", "approved")
+    .order("posted_at", { ascending: false });
+  if (error) throw error;
+  return res.status(200).json({ reviews: (data ?? []).map(mapLessonReview) });
+}
+
+async function submitLessonReview(body: Record<string, unknown>, res: ApiResponse) {
+  const studentName = cleanText(body.studentName);
+  const studentEmail = cleanText(body.studentEmail).toLowerCase();
+  const comment = cleanText(body.comment);
+  const rating = Number(body.rating);
+  if (!studentName || studentName.length > 100 || !comment || comment.length > 3000
+    || !Number.isInteger(rating) || rating < 1 || rating > 5
+    || (studentEmail && (!emailPattern.test(studentEmail) || studentEmail.length > 254))) {
+    return res.status(400).json({ message: "表示名・評価・コメントの入力内容を確認してください。" });
+  }
+  const serviceClient = await createServiceClient();
+  const { data, error } = await serviceClient.from("lesson_reviews").insert({
+    student_name: studentName,
+    student_email: studentEmail || null,
+    rating,
+    comment
+  }).select("id,student_name,rating,comment,status,posted_at").single();
+  if (error) throw error;
+  return res.status(201).json({ review: mapLessonReview(data) });
+}
+
+async function approveLessonReview(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const reviewId = cleanText(body.reviewId);
+  if (!/^[0-9a-f-]{36}$/i.test(reviewId)) return res.status(400).json({ message: "レビューIDが正しくありません。" });
+  const serviceClient = await createServiceClient();
+  const { data, error } = await serviceClient.from("lesson_reviews")
+    .update({ status: "approved", approved_at: new Date().toISOString() })
+    .eq("id", reviewId)
+    .eq("status", "pending")
+    .select("id,student_name,rating,comment,status,posted_at")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return res.status(404).json({ message: "確認待ちのレビューが見つかりません。" });
+  return res.status(200).json({ review: mapLessonReview(data) });
 }
 
 async function upsertStudent(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
@@ -1118,6 +1186,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (req.method === "GET") {
       const mode = queryValue(req.query?.mode);
       if (mode === "availability") return await listAvailability(res);
+      if (mode === "reviews") return await listApprovedReviews(res);
       if (mode === "admin") return await listAdmin(req, res);
       return res.status(400).json({ message: "Unknown mode." });
     }
@@ -1128,6 +1197,8 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const body = normalizeBody(req.body);
     const action = cleanText(body.action);
     if (action === "admin-login") return await loginTutor(body, res);
+    if (action === "submit-review") return await submitLessonReview(body, res);
+    if (action === "approve-review") return await approveLessonReview(body, req, res);
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);
     if (action === "find-auth-student-by-email") return await findAuthStudentByEmail(body, req, res);

@@ -392,6 +392,25 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
 
   useEffect(() => {
     let mounted = true;
+    void fetch("/api/learning?mode=reviews", { headers: { Accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("レビューを取得できませんでした。");
+        return response.json() as Promise<{ reviews?: LessonReview[] }>;
+      })
+      .then((body) => {
+        if (!mounted) return;
+        setReviews((current) => [
+          ...importedLessonReviews,
+          ...(body.reviews ?? []),
+          ...current.filter((review) => review.status === "pending")
+        ]);
+      })
+      .catch((error) => console.error("Lesson reviews could not be loaded.", error));
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     const loadSharedSchedule = async () => {
       try {
         const [learningAvailabilityResponse, availabilityResponse, occupancyResponse] = await Promise.all([
@@ -1847,6 +1866,8 @@ function LessonReviewPage({
   const [reviewEmail, setReviewEmail] = useState(studentEmail);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5>(5);
   const [comment, setComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSubmitMessage, setReviewSubmitMessage] = useState("");
   const [reviewSort, setReviewSort] = useState<ReviewSort>("date-desc");
   const approvedReviews = useMemo(() => {
     const nextReviews = reviews.filter((review) => review.status === "approved");
@@ -1860,20 +1881,33 @@ function LessonReviewPage({
   }, [reviewSort, reviews]);
   const text = getReviewCopy(language);
 
-  const submitReview = (event: FormEvent<HTMLFormElement>) => {
+  const submitReview = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!reviewName.trim() || !comment.trim()) return;
-    const nextReview: LessonReview = {
-      id: `RV-${Math.floor(2000 + Math.random() * 7000)}`,
-      studentName: reviewName.trim(),
-      studentEmail: reviewEmail.trim().toLowerCase(),
-      rating,
-      comment: comment.trim(),
-      postedAt: new Date().toISOString(),
-      status: "pending"
-    };
-    setReviews([nextReview, ...reviews]);
-    setComment("");
+    if (!reviewName.trim() || !comment.trim() || reviewSubmitting) return;
+    setReviewSubmitting(true);
+    setReviewSubmitMessage("");
+    try {
+      const response = await fetch("/api/learning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          action: "submit-review",
+          studentName: reviewName.trim(),
+          studentEmail: reviewEmail.trim().toLowerCase(),
+          rating,
+          comment: comment.trim()
+        })
+      });
+      const body = await response.json() as { review?: LessonReview; message?: string };
+      if (!response.ok || !body.review) throw new Error(body.message || text.failed);
+      setReviews([body.review, ...reviews]);
+      setComment("");
+      setReviewSubmitMessage(text.sent);
+    } catch (error) {
+      setReviewSubmitMessage(error instanceof Error ? error.message : text.failed);
+    } finally {
+      setReviewSubmitting(false);
+    }
   };
 
   return (
@@ -1895,7 +1929,7 @@ function LessonReviewPage({
         <div className="platform-grid two">
           <label>
             {text.name}
-            <input value={reviewName} onChange={(event) => setReviewName(event.target.value)} required />
+            <input value={reviewName} onChange={(event) => setReviewName(event.target.value)} maxLength={100} required />
           </label>
           <label>
             {text.email}
@@ -1911,14 +1945,15 @@ function LessonReviewPage({
               </button>
             ))}
           </fieldset>
-          <button className="button primary" type="submit">
-            {text.submit}
+          <button className="button primary" type="submit" disabled={reviewSubmitting}>
+            {reviewSubmitting ? text.submitting : text.submit}
           </button>
         </div>
         <label>
           {text.comment}
-          <textarea value={comment} rows={3} onChange={(event) => setComment(event.target.value)} required />
+          <textarea value={comment} rows={3} maxLength={3000} onChange={(event) => setComment(event.target.value)} required />
         </label>
+        {reviewSubmitMessage ? <p className="platform-muted" role="status">{reviewSubmitMessage}</p> : null}
       </form>
 
       <section className="platform-card">
@@ -2003,6 +2038,8 @@ function TutorAvailabilityPage({
   const [purchaseOffers, setPurchaseOffers] = useState<LearningPurchaseOffer[]>([]);
   const [adminStudents, setAdminStudents] = useState<LearningAdminStudent[]>([]);
   const [purchaseOffersReady, setPurchaseOffersReady] = useState(true);
+  const [reviewsReady, setReviewsReady] = useState(true);
+  const [reviewActionMessage, setReviewActionMessage] = useState("");
   const sharedBusySlots = sharedReservations
     .filter((item) => item.status === "active")
     .map((item) => ({ start: item.starts_at, end: item.ends_at }));
@@ -2165,6 +2202,8 @@ function TutorAvailabilityPage({
       students?: LearningAdminStudent[];
       bookings?: Array<Record<string, unknown>>;
       purchaseOffersReady?: boolean;
+      reviews?: LessonReview[];
+      reviewsReady?: boolean;
     };
     if (!response.ok) throw new Error(body.message || "講師管理データを取得できませんでした。");
     setAvailabilitySlots((body.slots ?? []).map(mapAdminSlot));
@@ -2177,6 +2216,8 @@ function TutorAvailabilityPage({
       return [...syncedBookings, ...current.filter((booking) => !syncedIds.has(booking.id))];
     });
     setPurchaseOffersReady(body.purchaseOffersReady !== false);
+    setReviewsReady(body.reviewsReady !== false);
+    if (body.reviewsReady !== false) setReviews([...importedLessonReviews, ...(body.reviews ?? [])]);
   };
 
   useEffect(() => {
@@ -2467,10 +2508,18 @@ function TutorAvailabilityPage({
     }
   };
 
-  const publishReview = (reviewId: string) => {
-    setReviews(reviews.map((review) => (
-      review.id === reviewId ? { ...review, status: "approved" } : review
-    )));
+  const publishReview = async (reviewId: string) => {
+    setAdminBusy(true);
+    setReviewActionMessage("");
+    try {
+      const body = await postLearningAdmin<{ review: LessonReview }>({ action: "approve-review", reviewId });
+      setReviews(reviews.map((review) => review.id === reviewId ? body.review : review));
+      setReviewActionMessage("レビューを掲載しました。");
+    } catch (error) {
+      setReviewActionMessage(error instanceof Error ? error.message : "レビューを掲載できませんでした。");
+    } finally {
+      setAdminBusy(false);
+    }
   };
 
   const approveBooking = async (bookingId: string) => {
@@ -3098,15 +3147,18 @@ function TutorAvailabilityPage({
       <section className="platform-card">
         <h3>レビュー管理</h3>
         <p className="platform-muted">投稿されたレビューを確認し、掲載するものを選択できます。</p>
+        <button className="button secondary" type="button" onClick={() => void loadLearningAdmin(adminToken).catch((error) => setReviewActionMessage(error instanceof Error ? error.message : "レビューを再取得できませんでした。"))} disabled={adminBusy}>再読み込み</button>
+        {!reviewsReady ? <p role="alert">レビューを読み込めません。データベースの設定を確認してください。</p> : null}
+        {reviewActionMessage ? <p role="status">{reviewActionMessage}</p> : null}
         <div className="review-grid">
           {pendingReviews.length > 0 ? pendingReviews.map((review) => (
             <div className="review-card-pending" key={review.id}>
               <ReviewCard review={review} language={language} />
-              <button className="button primary" type="button" onClick={() => publishReview(review.id)}>
+              <button className="button primary" type="button" onClick={() => void publishReview(review.id)} disabled={adminBusy}>
                 掲載する
               </button>
             </div>
-          )) : <p className="platform-muted">確認待ちのレビューはありません。</p>}
+          )) : reviewsReady ? <p className="platform-muted">確認待ちのレビューはありません。</p> : null}
         </div>
       </section>
       ) : null}
@@ -4808,6 +4860,9 @@ function getReviewCopy(language: PlatformLanguage) {
       rating: "評価",
       comment: "コメント",
       submit: "レビューを送信",
+      submitting: "送信中…",
+      sent: "レビューを受け付けました。掲載前に講師が内容を確認します。",
+      failed: "レビューを送信できませんでした。時間をおいて再度お試しください。",
       sortLabel: "並び順",
       sortDateDesc: "投稿日：新しい順",
       sortDateAsc: "投稿日：古い順",
@@ -4828,6 +4883,9 @@ function getReviewCopy(language: PlatformLanguage) {
       rating: "Rating",
       comment: "Comment",
       submit: "Submit review",
+      submitting: "Submitting…",
+      sent: "Your review was received and is awaiting tutor approval.",
+      failed: "Your review could not be submitted. Please try again later.",
       sortLabel: "Sort by",
       sortDateDesc: "Date: newest first",
       sortDateAsc: "Date: oldest first",
@@ -4848,6 +4906,9 @@ function getReviewCopy(language: PlatformLanguage) {
       rating: "評分",
       comment: "留言",
       submit: "送出評價",
+      submitting: "傳送中…",
+      sent: "已收到您的評價，待老師確認後刊登。",
+      failed: "無法送出評價，請稍後再試。",
       sortLabel: "排序",
       sortDateDesc: "日期：由新到舊",
       sortDateAsc: "日期：由舊到新",

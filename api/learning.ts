@@ -386,11 +386,11 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
   });
 }
 
-function mapLessonReview(record: Record<string, unknown>) {
+function mapLessonReview(record: Record<string, unknown>, includeEmail = true) {
   return {
     id: String(record.id),
     studentName: String(record.student_name),
-    studentEmail: typeof record.student_email === "string" ? record.student_email : undefined,
+    studentEmail: includeEmail && typeof record.student_email === "string" ? record.student_email : undefined,
     rating: Number(record.rating),
     comment: String(record.comment),
     postedAt: String(record.posted_at),
@@ -405,7 +405,7 @@ async function listApprovedReviews(res: ApiResponse) {
     .eq("status", "approved")
     .order("posted_at", { ascending: false });
   if (error) throw error;
-  return res.status(200).json({ reviews: (data ?? []).map(mapLessonReview) });
+  return res.status(200).json({ reviews: (data ?? []).map((record: Record<string, unknown>) => mapLessonReview(record, false)) });
 }
 
 async function submitLessonReview(body: Record<string, unknown>, res: ApiResponse) {
@@ -426,7 +426,7 @@ async function submitLessonReview(body: Record<string, unknown>, res: ApiRespons
     comment
   }).select("id,student_name,rating,comment,status,posted_at").single();
   if (error) throw error;
-  return res.status(201).json({ review: mapLessonReview(data) });
+  return res.status(201).json({ review: mapLessonReview(data, false) });
 }
 
 async function approveLessonReview(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {

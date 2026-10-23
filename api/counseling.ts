@@ -176,6 +176,12 @@ async function buildAvailability(serviceClient: Awaited<ReturnType<typeof create
   return { settings, slots, reservations };
 }
 
+export async function openCounselingSlotsForLearning() {
+  const serviceClient = await createServiceClient();
+  const { slots } = await buildAvailability(serviceClient);
+  return slots;
+}
+
 async function deleteAvailabilitySlot(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
   await assertCounselor(getBearerToken(req.headers));
   const start = cleanText(body.start);
@@ -518,7 +524,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     if (action === "send-payment") return await sendPaymentGuide(body, req, res);
     if (action === "mark-paid") return await markPaid(body, req, res);
     if (action === "cancel") return await cancelByCounselor(body, req, res);
-    if (action === "sync-learning") return await syncLearningReservation(body, req, res);
+    if (action === "sync-learning") return res.status(410).json({ message: "Learning予約は/api/learningで登録してください。" });
     if (action === "update-learning") return await updateLearningReservation(body, req, res);
     return res.status(400).json({ message: "Unknown action." });
   } catch (error) {

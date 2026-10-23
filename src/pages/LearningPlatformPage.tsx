@@ -269,45 +269,17 @@ async function getSupabaseAccessToken() {
   return result.data.session?.access_token ?? "";
 }
 
-async function syncLearningScheduleReservations(bookings: BookingRecord[], slots: TutorAvailabilitySlot[]) {
-  try {
-    const token = await getSupabaseAccessToken();
-    if (!token) return "skipped" as const;
-    const response = await fetch("/api/counseling", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        action: "sync-learning",
-        reservations: bookings.map((booking, index) => ({
-          sourceId: booking.id,
-          start: booking.requestedSlot,
-          durationMinutes: getSlotDurationMinutes(slots[index])
-        }))
-      })
-    });
-    if (response.status === 409) return "conflict" as const;
-    return response.ok ? "synced" as const : "failed" as const;
-  } catch {
-    return "failed" as const;
-  }
-}
-
-async function updateLearningScheduleReservation(sourceId: string, active: boolean) {
-  try {
-    const token = await getSupabaseAccessToken();
-    if (!token) return false;
-    const response = await fetch("/api/counseling", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: "update-learning", sourceId, active })
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+async function postStudentLearning<T>(payload: Record<string, unknown>): Promise<T> {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("ログイン状態を確認できません。再度ログインしてください。");
+  const response = await fetch("/api/learning", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+  const body = await response.json() as T & { message?: string };
+  if (!response.ok) throw new Error(body.message || "保存に失敗しました。再度お試しください。");
+  return body;
 }
 
 const initialStudentProfiles: StudentProfile[] = [];
@@ -333,6 +305,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     return saved === "en" || saved === "zh-Hant" || saved === "ja" ? saved : "ja";
   });
   const [bookings, setBookingsBase] = useState<BookingRecord[]>(() => {
+    if (isSupabaseConfigured()) return [];
     const saved = window.localStorage.getItem(bookingsStorageKey);
     if (!saved) return demoBookings;
     try {
@@ -349,6 +322,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     isSupabaseConfigured() ? "" : window.localStorage.getItem(studentEmailKey) ?? ""
   ));
   const [studentProfiles, setStudentProfilesBase] = useState<StudentProfile[]>(() => {
+    if (isSupabaseConfigured()) return [];
     const saved = window.localStorage.getItem(studentProfilesStorageKey);
     if (!saved) return initialStudentProfiles;
     try {
@@ -468,23 +442,10 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       try {
         const profile = await ensureSupabaseStudentProfile(user, studentProfilesRef.current);
         if (!mounted) return false;
-        setStudentProfilesBase((current) => {
-          const profileExists = current.some((item) => item.email.toLowerCase() === profile.email.toLowerCase());
-          const nextProfiles = profileExists
-            ? current.map((item) => item.email.toLowerCase() === profile.email.toLowerCase() ? profile : item)
-            : [...current, profile];
-          studentProfilesRef.current = nextProfiles;
-          window.localStorage.setItem(studentProfilesStorageKey, JSON.stringify(nextProfiles));
-          return nextProfiles;
-        });
+        setStudentProfilesBase([profile]);
+        studentProfilesRef.current = [profile];
         setStudentEmail(profile.email);
-        setBookingsBase((current) => {
-          const syncedBookings = profile.bookings ?? [];
-          const syncedIds = new Set(syncedBookings.map((booking) => booking.id));
-          const nextBookings = [...syncedBookings, ...current.filter((booking) => !syncedIds.has(booking.id))];
-          window.localStorage.setItem(bookingsStorageKey, JSON.stringify(nextBookings));
-          return nextBookings;
-        });
+        setBookingsBase(profile.bookings ?? []);
         setBookingForm((current) => ({ ...current, email: profile.email, name: profile.name }));
         window.localStorage.setItem(studentEmailKey, profile.email);
         window.sessionStorage.removeItem(authPendingKey);
@@ -500,7 +461,9 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
         window.localStorage.removeItem(studentEmailKey);
         window.sessionStorage.removeItem(authPendingKey);
         setAuthStatus("failed");
-        setAuthStatusMessage("ログインは確認できましたが、購入情報を読み込めませんでした。ページを再読み込みしてもう一度お試しください。");
+        setAuthStatusMessage(error instanceof Error && error.message.includes("integrity")
+          ? "購入回数と予約データの不一致を検知しました。誤った残回数を表示しないため、管理者へお問い合わせください。"
+          : "ログインは確認できましたが、購入情報を読み込めませんでした。ページを再読み込みしてもう一度お試しください。");
         return false;
       }
     };
@@ -579,14 +542,25 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
   const setBookings = (nextBookings: BookingRecord[] | ((current: BookingRecord[]) => BookingRecord[])) => {
     setBookingsBase((current) => {
       const resolved = typeof nextBookings === "function" ? nextBookings(current) : nextBookings;
-      window.localStorage.setItem(bookingsStorageKey, JSON.stringify(resolved));
+      if (!supabaseAvailable) window.localStorage.setItem(bookingsStorageKey, JSON.stringify(resolved));
       return resolved;
     });
   };
 
   const setStudentProfiles = (profiles: StudentProfile[]) => {
     setStudentProfilesBase(profiles);
-    window.localStorage.setItem(studentProfilesStorageKey, JSON.stringify(profiles));
+    if (!supabaseAvailable) window.localStorage.setItem(studentProfilesStorageKey, JSON.stringify(profiles));
+  };
+
+  const refreshStudentFromDb = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) throw new Error("DBに接続できません。");
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw new Error("ログイン状態を確認できません。");
+    const profile = await ensureSupabaseStudentProfile(data.user, studentProfilesRef.current);
+    setStudentProfilesBase([profile]);
+    studentProfilesRef.current = [profile];
+    setBookingsBase(profile.bookings ?? []);
   };
 
   const submitBooking = async (event: FormEvent<HTMLFormElement>) => {
@@ -594,11 +568,13 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     const studentCopy = getStudentPageCopy(language);
     const emailForRequest = (bookingForm.email || studentEmail).trim().toLowerCase();
     const nameForRequest = bookingForm.name.trim();
+    const activeProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === studentEmail.toLowerCase());
+    const bookingCustomer = { ...customer, email: studentEmail, lessonCredits: activeProfile?.lessonCredits ?? [] };
     const requestedLessonKind = getBookingLessonKind(bookingForm);
-    const bookableLessonKinds = getBookableLessonKinds(emailForRequest, customer);
+    const bookableLessonKinds = getBookableLessonKinds(emailForRequest, bookingCustomer);
     const lessonKind = bookableLessonKinds.includes(requestedLessonKind) ? requestedLessonKind : bookableLessonKinds[0] ?? requestedLessonKind;
     const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForRequest);
-    const menus = getEligibleBookingMenus(lessonKind, emailForRequest, customer);
+    const menus = getEligibleBookingMenus(lessonKind, emailForRequest, bookingCustomer);
     const menu = menus.find((item) => item.id === bookingForm.lessonMenuId) ?? menus[0];
     const requestedSlots = bookingForm.requestedSlots.filter((slot) => !isAvailabilitySlotBooked(slot, bookings));
 
@@ -607,7 +583,7 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       return;
     }
 
-    if (!nameForRequest || !emailForRequest || !emailIsValid || requestedSlots.length === 0 || !menu) {
+    if (!activeProfile || emailForRequest !== studentEmail.toLowerCase() || !nameForRequest || !emailForRequest || !emailIsValid || requestedSlots.length === 0 || !menu) {
       setBookingMessage(studentCopy.validationError);
       return;
     }
@@ -633,14 +609,22 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       creditAction: "hold"
     }));
 
-    const scheduleSync = await syncLearningScheduleReservations(nextBookings, requestedSlots);
-    if (scheduleSync === "conflict") {
-      setBookingMessage("選択した候補枠は、別の予約により受付できなくなりました。カレンダーを再読み込みして別の日時をお選びください。");
-      return;
-    }
-
-    if (scheduleSync !== "synced") {
-      setBookingMessage(language === "ja" ? "予約状況を確認できませんでした。時間をおいて再度お試しください。" : language === "en" ? "We could not verify availability. Please try again shortly." : "無法確認預約狀況，請稍後再試。");
+    let savedBookings: BookingRecord[];
+    try {
+      const saved = await postStudentLearning<{ bookings: Array<{ id: string; requested_at: string; requested_slot: string }> }>({
+        action: "request-bookings", lessonKind, lessonMenuId: menu.id,
+        bookings: nextBookings.map((booking, index) => ({
+          start: new Date(booking.requestedSlot).toISOString(),
+          end: new Date(requestedSlots[index].end).toISOString(),
+          note: booking.reason
+        }))
+      });
+      savedBookings = nextBookings.map((booking, index) => ({
+        ...booking, id: saved.bookings[index].id, requestedAt: saved.bookings[index].requested_at,
+        requestedSlot: saved.bookings[index].requested_slot
+      }));
+    } catch (error) {
+      setBookingMessage(error instanceof Error ? error.message : "予約を保存できませんでした。");
       return;
     }
 
@@ -663,31 +647,21 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       ].join("\n")
     });
 
-    setBookings((current) => [...nextBookings, ...current]);
+    try {
+      await refreshStudentFromDb();
+    } catch (error) {
+      console.error("Booking was saved but the student dashboard did not refresh.", error);
+      setBookingMessage("予約はDBに保存されましたが、画面への同期を確認できません。再読み込みしてください。二重送信はしないでください。");
+      return;
+    }
     setStudentEmail(emailForRequest);
     window.localStorage.setItem(studentEmailKey, emailForRequest);
     setBookingForm({ ...initialBookingForm, name: nameForRequest, email: emailForRequest, lessonMenuId: menu.id });
-    setChangeRequest((current) => ({ ...current, bookingId: nextBookings[0].id }));
+    setChangeRequest((current) => ({ ...current, bookingId: savedBookings[0].id }));
     setBookingMessage(
       notificationSent
-        ? studentCopy.bookingSuccess(nextBookings.length)
-        : studentCopy.bookingMailError(nextBookings.length)
-    );
-  };
-
-  const updateBookingStatus = (bookingId: string, status: BookingStatus, reason?: string) => {
-    setBookings((current) =>
-      current.map((booking) =>
-        booking.id === bookingId
-          ? {
-              ...booking,
-              status,
-              reason: reason ?? booking.reason,
-              approvalGate: status === "approved" ? "none" : "tutor",
-              creditAction: status === "approved" ? "consumed" : booking.creditAction
-            }
-          : booking
-      )
+        ? studentCopy.bookingSuccess(savedBookings.length)
+        : studentCopy.bookingMailError(savedBookings.length)
     );
   };
 
@@ -701,6 +675,15 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
     }
 
     const booking = bookings.find((item) => item.id === changeRequest.bookingId);
+    if (!booking || booking.studentEmail.toLowerCase() !== studentEmail.toLowerCase()) return;
+    try {
+      await postStudentLearning({
+        action: "request-booking-change", bookingId: booking.id, status: changeRequest.type, reason: changeRequest.reason.trim()
+      });
+    } catch (error) {
+      setBookingMessage(error instanceof Error ? error.message : "変更希望を保存できませんでした。");
+      return;
+    }
     const requestLabel = changeRequest.type === "cancel_requested" ? "キャンセル" : "日程変更";
     const displayRequestLabel = changeRequest.type === "cancel_requested" ? studentCopy.cancel : studentCopy.reschedule;
     const notificationSent = await sendPlatformNotification({
@@ -722,7 +705,14 @@ export function LearningPlatformPage({ route }: LearningPlatformPageProps) {
       ].join("\n")
     });
 
-    updateBookingStatus(changeRequest.bookingId, changeRequest.type, changeRequest.reason.trim());
+    try {
+      await refreshStudentFromDb();
+    } catch (error) {
+      console.error("Booking change was saved but the student dashboard did not refresh.", error);
+      setBookingMessage("変更希望はDBに保存されましたが、画面への同期を確認できません。再読み込みしてください。二重送信はしないでください。");
+      return;
+    }
+
     setBookingMessage(
       notificationSent
         ? studentCopy.changeSuccess(displayRequestLabel)
@@ -2187,7 +2177,8 @@ function TutorAvailabilityPage({
       status,
       reason: typeof record.note === "string" && record.note.trim() ? record.note : undefined,
       approvalGate: status === "approved" ? "none" : "tutor",
-      creditAction: status === "approved" ? "consumed" : "hold"
+      creditAction: status === "approved" ? "consumed" : "hold",
+      lessonNoteSent: Boolean(record.lesson_note_sent_at)
     };
   };
 
@@ -2211,10 +2202,7 @@ function TutorAvailabilityPage({
     const nextStudents = body.students ?? [];
     setAdminStudents(nextStudents);
     const syncedBookings = (body.bookings ?? []).map((record) => mapAdminBooking(record, nextStudents));
-    setBookings((current) => {
-      const syncedIds = new Set(syncedBookings.map((booking) => booking.id));
-      return [...syncedBookings, ...current.filter((booking) => !syncedIds.has(booking.id))];
-    });
+    setBookings(syncedBookings);
     setPurchaseOffersReady(body.purchaseOffersReady !== false);
     setReviewsReady(body.reviewsReady !== false);
     if (body.reviewsReady !== false) setReviews([...importedLessonReviews, ...(body.reviews ?? [])]);
@@ -2368,7 +2356,7 @@ function TutorAvailabilityPage({
   };
 
   const sendLessonNote = async (booking: BookingRecord) => {
-    const note = (lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim();
+    const note = (lessonNoteDrafts[booking.id] ?? "").trim();
     if (!note) return;
     setLessonNoteMessages({ ...lessonNoteMessages, [booking.id]: `送信中: ${booking.studentEmail}` });
 
@@ -2396,8 +2384,15 @@ function TutorAvailabilityPage({
       return;
     }
 
+    try {
+      await postLearningAdmin({ action: "mark-lesson-note-sent", bookingId: booking.id, note });
+    } catch (error) {
+      setLessonNoteMessages({ ...lessonNoteMessages, [booking.id]: `メールは送信済みですが、DBへの記録に失敗しました: ${error instanceof Error ? error.message : "再読み込みして確認してください。"}` });
+      return;
+    }
+
     setBookings((current) => current.map((item) => (
-      item.id === booking.id ? { ...item, reason: note, lessonNoteSent: true } : item
+      item.id === booking.id ? { ...item, lessonNoteSent: true } : item
     )));
     const nextDrafts = { ...lessonNoteDrafts };
     delete nextDrafts[booking.id];
@@ -2526,13 +2521,18 @@ function TutorAvailabilityPage({
     const booking = bookings.find((item) => item.id === bookingId);
     if (!booking) return;
     const conflicts = findOverlappingBookings(booking, bookings);
+    try {
+      await postLearningAdmin({ action: "update-booking-status", bookingId, status: "approved" });
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "予約を確定できませんでした。");
+      return;
+    }
     const nextBookings = bookings.map((item) => (
       item.id === bookingId
         ? { ...item, status: "approved" as BookingStatus, approvalGate: "none" as const, creditAction: "consumed" as const }
         : item
     ));
     setBookings(nextBookings);
-    void updateLearningScheduleReservation(booking.id, true);
 
     await sendPlatformNotification({
       name: booking.student,
@@ -2577,12 +2577,17 @@ function TutorAvailabilityPage({
   const rejectBooking = async (bookingId: string) => {
     const booking = bookings.find((item) => item.id === bookingId);
     if (!booking) return;
+    try {
+      await postLearningAdmin({ action: "update-booking-status", bookingId, status: "cancelled" });
+    } catch (error) {
+      setAdminMessage(error instanceof Error ? error.message : "予約を見送れませんでした。");
+      return;
+    }
     setBookings(bookings.map((item) => (
       item.id === bookingId
         ? { ...item, status: "cancelled" as BookingStatus, approvalGate: "none" as const, creditAction: "restored" as const }
         : item
     )));
-    void updateLearningScheduleReservation(booking.id, false);
 
     await sendPlatformNotification({
       name: booking.student,
@@ -2714,13 +2719,13 @@ function TutorAvailabilityPage({
               <label>
                 レッスンノート
                 <textarea
-                  value={lessonNoteDrafts[booking.id] ?? booking.reason ?? ""}
+                  value={lessonNoteDrafts[booking.id] ?? ""}
                   rows={5}
                   onChange={(event) => updateLessonNoteDraft(booking.id, event.target.value)}
                   placeholder="生徒へ共有するレッスン内容、宿題、次回に向けたメモを入力"
                 />
               </label>
-              <button className="button primary" type="button" onClick={() => void sendLessonNote(booking)} disabled={!(lessonNoteDrafts[booking.id] ?? booking.reason ?? "").trim()}>
+              <button className="button primary" type="button" onClick={() => void sendLessonNote(booking)} disabled={!(lessonNoteDrafts[booking.id] ?? "").trim()}>
                 完了
               </button>
             </article>
@@ -3417,44 +3422,7 @@ function StudentDashboard({
       return;
     }
 
-    if (authProvider === "google") {
-      await startGoogleAuth();
-      return;
-    }
-
-    if (authMode === "signup") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) return;
-      const existingProfile = studentProfiles.find((profile) => profile.email.toLowerCase() === nextEmail);
-      const profile = existingProfile ?? {
-        studentId: generateStudentId(studentProfiles),
-        name: loginName.trim() || nextEmail.split("@")[0],
-        email: nextEmail,
-        provider: authProvider,
-        createdAt: new Date().toISOString(),
-        zoomLink: ""
-      };
-      if (!existingProfile) {
-        setStudentProfiles([...studentProfiles, profile]);
-      }
-      setStudentEmail(nextEmail);
-      setBookingForm({ ...bookingForm, email: nextEmail, name: profile.name });
-      window.localStorage.setItem(studentEmailKey, nextEmail);
-      setAuthMessage(`StudentID: ${profile.studentId}`);
-      return;
-    }
-
-    const identifier = loginEmail.trim().toLowerCase();
-    const profile = studentProfiles.find((item) => (
-      item.email.toLowerCase() === identifier || item.studentId.toLowerCase() === identifier
-    ));
-    if (!profile) {
-      setAuthMessage("StudentIDまたはメールアドレスを確認してください。");
-      return;
-    }
-    setStudentEmail(profile.email);
-    setBookingForm({ ...bookingForm, email: profile.email, name: profile.name });
-    window.localStorage.setItem(studentEmailKey, profile.email);
-    setAuthMessage("");
+    setAuthMessage("認証設定を確認できません。管理者にお問い合わせください。");
   };
 
   const toggleAvailabilitySlot = (slot: TutorAvailabilitySlot) => {
@@ -4079,6 +4047,7 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     purchasedLessons: number;
     remainingLessons: number;
     bookingCount: number;
+    balanceMatches: boolean;
   };
   type SyncedProfile = Partial<StudentProfile> & { sync?: Partial<ProfileSyncSummary> };
   let body: { profile?: SyncedProfile; message?: string } = {};
@@ -4126,13 +4095,15 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     || Number(sync.purchasedLessons) !== clientPurchasedLessons
     || Number(sync.remainingLessons) !== clientRemainingLessons
     || Number(sync.bookingCount) !== body.profile.bookings.length
+    || sync.balanceMatches !== true
   ) {
     console.error("Student data sync integrity alert.", {
       path: window.location.pathname,
       packageCountMatches: Number(sync?.packageCount) === clientPackageCount,
       purchasedLessonsMatch: Number(sync?.purchasedLessons) === clientPurchasedLessons,
       remainingLessonsMatch: Number(sync?.remainingLessons) === clientRemainingLessons,
-      bookingCountMatches: Number(sync?.bookingCount) === body.profile.bookings.length
+      bookingCountMatches: Number(sync?.bookingCount) === body.profile.bookings.length,
+      balanceMatches: sync?.balanceMatches === true
     });
     throw new Error("Student package synchronization integrity check failed.");
   }
@@ -4143,7 +4114,7 @@ async function ensureSupabaseStudentProfile(user: SupabaseUserLike, localProfile
     email: String(body.profile.email).toLowerCase(),
     provider: mapSupabaseProvider(body.profile.provider),
     createdAt: String(body.profile.createdAt || localProfile?.createdAt || new Date().toISOString()),
-    zoomLink: String(body.profile.zoomLink || localProfile?.zoomLink || ""),
+    zoomLink: String(body.profile.zoomLink || ""),
     lessonCredits: body.profile.lessonCredits,
     bookings: body.profile.bookings
   };

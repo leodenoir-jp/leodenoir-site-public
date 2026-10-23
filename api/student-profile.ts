@@ -50,6 +50,7 @@ type BookingRecord = {
   timezone: string;
   status: string;
   note: string | null;
+  lesson_note_sent_at?: string | null;
 };
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -97,7 +98,7 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
       .order("purchased_at", { ascending: false }),
     serviceClient
       .from("bookings")
-      .select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note")
+      .select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,lesson_note_sent_at")
       .eq("student_id", record.id)
       .order("requested_slot", { ascending: true })
   ]);
@@ -105,13 +106,23 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
   if (bookingsResult.error) throw bookingsResult.error;
   const packages = (packagesResult.data ?? []) as LessonPackageRecord[];
   const bookings = (bookingsResult.data ?? []) as BookingRecord[];
+  const balanceMatches = ["japanese", "english"].every((kind) => {
+    const kindPackages = packages.filter((item) => item.lesson_kind === kind);
+    if (kindPackages.length === 0) return true;
+    const purchased = kindPackages.reduce((sum, item) => sum + Number(item.purchased_lessons), 0);
+    const remaining = kindPackages.reduce((sum, item) => sum + Number(item.remaining_lessons), 0);
+    const used = bookings.filter((item) => item.lesson_kind === kind && item.status !== "cancelled").length;
+    return remaining === Math.max(0, purchased - used);
+  });
+  if (!balanceMatches) console.error("Student booking and package balance mismatch.", { studentId: record.student_id });
   const sync = {
     source: "supabase",
     checkedAt: new Date().toISOString(),
     packageCount: packages.length,
     purchasedLessons: packages.reduce((total, item) => total + Number(item.purchased_lessons), 0),
     remainingLessons: packages.reduce((total, item) => total + Number(item.remaining_lessons), 0),
-    bookingCount: bookings.length
+    bookingCount: bookings.length,
+    balanceMatches
   };
   console.info("Student package profile loaded.", {
     studentId: record.student_id,
@@ -149,6 +160,7 @@ async function toProfileWithPackages(serviceClient: any, record: StudentRecord) 
         timezone: item.timezone || "Asia/Tokyo",
         status,
         reason: item.note || undefined,
+        lessonNoteSent: Boolean(item.lesson_note_sent_at),
         approvalGate: status === "approved" ? "none" : "tutor",
         creditAction: status === "approved" ? "consumed" : "hold"
       };

@@ -1,4 +1,5 @@
 import { isPayPalPaymentLink, isPaymentCurrencySupported } from "../shared/paymentMethods.js";
+import { openCounselingSlotsForLearning } from "./counseling.js";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -107,6 +108,159 @@ async function createServiceClient() {
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
+}
+
+async function authenticatedStudent(req: ApiRequest, serviceClient: any) {
+  const token = getBearerToken(req.headers);
+  if (!token) throw new Error("Unauthorized");
+  const url = process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error("Supabase auth configuration is missing.");
+  const { createClient } = await import("@supabase/supabase-js");
+  const auth = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await auth.auth.getUser(token);
+  if (error || !data.user?.id) throw new Error("Unauthorized");
+  const result = await serviceClient.from("students").select("id,email,name").eq("auth_user_id", data.user.id).maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data || result.data.email.toLowerCase() !== data.user.email?.toLowerCase()) throw new Error("Unauthorized");
+  return result.data as { id: string; email: string; name: string | null };
+}
+
+async function requestStudentBookings(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  const serviceClient = await createServiceClient();
+  const student = await authenticatedStudent(req, serviceClient);
+  const inputs = Array.isArray(body.bookings) ? body.bookings : [];
+  if (inputs.length < 1 || inputs.length > 12) return res.status(400).json({ message: "予約候補は1〜12枠で指定してください。" });
+  const lessonKind = cleanText(body.lessonKind);
+  const lessonMenuId = cleanText(body.lessonMenuId);
+  if (!["japanese", "english"].includes(lessonKind) || !lessonMenuId) return res.status(400).json({ message: "レッスン種別を確認してください。" });
+  const now = new Date();
+  const slots = inputs.map((value) => {
+    const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+    const start = new Date(cleanText(input.start));
+    const end = new Date(cleanText(input.end));
+    const minutes = (end.getTime() - start.getTime()) / 60_000;
+    return { start, end, minutes, note: cleanText(input.note).slice(0, 1000) };
+  });
+  if (slots.some((slot) => !Number.isFinite(slot.start.getTime()) || !Number.isFinite(slot.end.getTime()) || slot.start <= now || slot.start.getTime() > now.getTime() + 90 * 86_400_000 || slot.minutes < 25 || slot.minutes > 180)) {
+    return res.status(400).json({ message: "予約日時を確認してください。" });
+  }
+  const sorted = [...slots].sort((a, b) => a.start.getTime() - b.start.getTime());
+  if (sorted.some((slot, index) => index > 0 && slot.start < sorted[index - 1].end)) return res.status(400).json({ message: "予約候補が重複しています。" });
+  const [packagesResult, bookingsResult, availabilityResult] = await Promise.all([
+    serviceClient.from("lesson_packages").select("lesson_kind,lesson_menu_id,purchased_lessons,remaining_lessons").eq("student_id", student.id).eq("lesson_kind", lessonKind),
+    serviceClient.from("bookings").select("lesson_kind,status").eq("student_id", student.id).neq("status", "cancelled"),
+    serviceClient.from("availability_slots").select("starts_at,ends_at").gte("starts_at", sorted[0].start.toISOString()).lte("starts_at", sorted[sorted.length - 1].start.toISOString())
+  ]);
+  if (packagesResult.error) throw packagesResult.error;
+  if (bookingsResult.error) throw bookingsResult.error;
+  if (availabilityResult.error) throw availabilityResult.error;
+  const listedSlots = availabilityResult.data ?? [];
+  const needsSharedSlots = slots.some((slot) => !listedSlots.some((listed: Record<string, unknown>) => (
+    new Date(String(listed.starts_at)).getTime() === slot.start.getTime()
+    && new Date(String(listed.ends_at)).getTime() >= slot.end.getTime()
+  )));
+  const sharedSlots = needsSharedSlots ? await openCounselingSlotsForLearning() : [];
+  if (slots.some((slot) => !listedSlots.some((listed: Record<string, unknown>) => (
+    new Date(String(listed.starts_at)).getTime() === slot.start.getTime()
+    && new Date(String(listed.ends_at)).getTime() >= slot.end.getTime()
+  )) && !sharedSlots.some((shared) => (
+    new Date(shared.start).getTime() === slot.start.getTime()
+    && new Date(shared.end).getTime() >= slot.end.getTime()
+  )))) return res.status(409).json({ message: "選択した枠は現在公開されていません。再読み込みしてください。" });
+  const packages = packagesResult.data ?? [];
+  const purchased = packages.reduce((sum: number, item: Record<string, unknown>) => sum + Number(item.purchased_lessons), 0);
+  const remaining = packages.reduce((sum: number, item: Record<string, unknown>) => sum + Number(item.remaining_lessons), 0);
+  const activeBookings = (bookingsResult.data ?? []).filter((item: Record<string, unknown>) => item.lesson_kind === lessonKind).length;
+  if (remaining < slots.length || purchased - activeBookings < slots.length) {
+    return res.status(409).json({ message: "購入済みレッスンの残り回数を確認してください。" });
+  }
+  const { randomUUID } = await import("node:crypto");
+  const rows = slots.map((slot) => ({
+    id: randomUUID(), student_id: student.id, lesson_kind: lessonKind, lesson_menu_id: lessonMenuId,
+    requested_at: now.toISOString(), requested_slot: slot.start.toISOString(), timezone: "Asia/Tokyo",
+    status: "requested", note: slot.note, created_at: now.toISOString(), updated_at: now.toISOString()
+  }));
+  const reservationIds: string[] = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const reservation = await serviceClient.from("calendar_reservations").insert({
+      source_type: "learning", source_id: rows[index].id, starts_at: slots[index].start.toISOString(),
+      ends_at: slots[index].end.toISOString(), status: "active", owner_student_id: student.id
+    });
+    if (reservation.error) {
+      if (reservationIds.length) {
+        const rollback = await serviceClient.from("calendar_reservations").delete().eq("source_type", "learning").in("source_id", reservationIds);
+        if (rollback.error) throw rollback.error;
+      }
+      if (reservation.error.code === "23P01") return res.status(409).json({ message: "選択した枠に別の予約が入りました。再読み込みして選択してください。" });
+      throw reservation.error;
+    }
+    reservationIds.push(rows[index].id);
+  }
+  const inserted = await serviceClient.from("bookings").insert(rows).select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note");
+  if (inserted.error) {
+    const rollback = await serviceClient.from("calendar_reservations").delete().eq("source_type", "learning").in("source_id", reservationIds);
+    if (rollback.error) throw rollback.error;
+    throw inserted.error;
+  }
+  return res.status(200).json({ bookings: inserted.data ?? [] });
+}
+
+async function requestStudentBookingChange(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  const serviceClient = await createServiceClient();
+  const student = await authenticatedStudent(req, serviceClient);
+  const bookingId = cleanText(body.bookingId);
+  const status = cleanText(body.status);
+  const reason = cleanText(body.reason);
+  if (!/^[0-9a-f-]{36}$/i.test(bookingId) || !["reschedule_requested", "cancel_requested"].includes(status) || !reason || reason.length > 2000) {
+    return res.status(400).json({ message: "変更内容を確認してください。" });
+  }
+  const existing = await serviceClient.from("bookings").select("id,status,note").eq("id", bookingId).eq("student_id", student.id).maybeSingle();
+  if (existing.error) throw existing.error;
+  if (!existing.data || !["requested", "approved"].includes(existing.data.status)) return res.status(409).json({ message: "この予約は変更できません。" });
+  const note = [existing.data.note, `変更希望: ${reason}`].filter(Boolean).join("\n");
+  const updated = await serviceClient.from("bookings").update({ status, note, updated_at: new Date().toISOString() })
+    .eq("id", bookingId).eq("student_id", student.id).eq("status", existing.data.status).select("id,status,note").maybeSingle();
+  if (updated.error) throw updated.error;
+  if (!updated.data) return res.status(409).json({ message: "予約状態が更新されました。再読み込みしてください。" });
+  return res.status(200).json({ booking: updated.data });
+}
+
+async function updateAdminBooking(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const bookingId = cleanText(body.bookingId);
+  const status = cleanText(body.status);
+  if (!/^[0-9a-f-]{36}$/i.test(bookingId) || !["approved", "cancelled"].includes(status)) return res.status(400).json({ message: "予約を確認してください。" });
+  const serviceClient = await createServiceClient();
+  const existing = await serviceClient.from("bookings").select("id,status").eq("id", bookingId).maybeSingle();
+  if (existing.error) throw existing.error;
+  if (!existing.data || existing.data.status === "cancelled") return res.status(409).json({ message: "予約はすでに変更されています。" });
+  if (status === "cancelled") {
+    const released = await serviceClient.from("calendar_reservations").update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("source_type", "learning").eq("source_id", bookingId);
+    if (released.error) throw released.error;
+  }
+  const updated = await serviceClient.from("bookings").update({ status, updated_at: new Date().toISOString() })
+    .eq("id", bookingId).eq("status", existing.data.status).select("id,status").maybeSingle();
+  if (updated.error || !updated.data) {
+    if (status === "cancelled") await serviceClient.from("calendar_reservations").update({ status: "active" }).eq("source_type", "learning").eq("source_id", bookingId);
+    if (updated.error) throw updated.error;
+    return res.status(409).json({ message: "予約状態が更新されました。再読み込みしてください。" });
+  }
+  return res.status(200).json({ booking: updated.data });
+}
+
+async function markLessonNoteSent(body: Record<string, unknown>, req: ApiRequest, res: ApiResponse) {
+  await assertTutor(getBearerToken(req.headers));
+  const bookingId = cleanText(body.bookingId);
+  const note = cleanText(body.note);
+  if (!/^[0-9a-f-]{36}$/i.test(bookingId) || !note || note.length > 10000) return res.status(400).json({ message: "レッスンノートを確認してください。" });
+  const serviceClient = await createServiceClient();
+  const updated = await serviceClient.from("bookings").update({ lesson_note: note, lesson_note_sent_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", bookingId).eq("status", "approved").is("lesson_note_sent_at", null).select("id,lesson_note_sent_at").maybeSingle();
+  if (updated.error) throw updated.error;
+  if (!updated.data) return res.status(409).json({ message: "送信済み、または未確定の予約です。" });
+  return res.status(200).json({ booking: updated.data });
 }
 
 function tutorAdminEmail() {
@@ -338,20 +492,13 @@ async function listAvailability(res: ApiResponse) {
 async function listAdmin(req: ApiRequest, res: ApiResponse) {
   await assertTutor(getBearerToken(req.headers));
   const serviceClient = await createServiceClient();
-  const [slotsResult, offersResult, initialStudentsResult, bookingsResult, reviewsResult] = await Promise.all([
+  const [slotsResult, offersResult, studentsResult, bookingsResult, reviewsResult] = await Promise.all([
     serviceClient.from("availability_slots").select("id,starts_at,ends_at,timezone,delivery_mode,note").order("starts_at", { ascending: true }),
     serviceClient.from("lesson_purchase_offers").select("*,students(id,student_id,email,name)").order("offered_at", { ascending: false }),
     serviceClient.from("students").select("id,student_id,email,name,zoom_link,lesson_packages(lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at)").order("created_at", { ascending: false }),
-    serviceClient.from("bookings").select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,students(student_id,email,name)").order("requested_slot", { ascending: true }),
+    serviceClient.from("bookings").select("id,lesson_kind,lesson_menu_id,requested_at,requested_slot,timezone,status,note,lesson_note,lesson_note_sent_at,students(student_id,email,name)").order("requested_slot", { ascending: true }),
     serviceClient.from("lesson_reviews").select("id,student_name,student_email,rating,comment,status,posted_at").order("posted_at", { ascending: false })
   ]);
-  let studentsResult = initialStudentsResult;
-  if (studentsResult.error && /zoom_link/i.test(studentsResult.error.message)) {
-    studentsResult = await serviceClient
-      .from("students")
-      .select("id,student_id,email,name,lesson_packages(lesson_kind,lesson_menu_id,package_label,currency,unit_price,purchased_lessons,remaining_lessons,purchased_at)")
-      .order("created_at", { ascending: false });
-  }
   if (slotsResult.error) throw slotsResult.error;
   if (bookingsResult.error) throw bookingsResult.error;
   const purchaseOffersReady = !offersResult.error;
@@ -368,6 +515,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
       message: studentsResult.error.message
     });
   }
+  if (studentsResult.error) throw studentsResult.error;
   if (reviewsResult.error) {
     console.error("Learning reviews could not be loaded.", {
       code: reviewsResult.error.code,
@@ -381,7 +529,7 @@ async function listAdmin(req: ApiRequest, res: ApiResponse) {
     bookings: bookingsResult.data ?? [],
     purchaseOffersReady,
     studentsReady,
-    reviews: reviewsResult.error ? [] : (reviewsResult.data ?? []).map(mapLessonReview),
+    reviews: reviewsResult.error ? [] : (reviewsResult.data ?? []).map((review) => mapLessonReview(review)),
     reviewsReady: !reviewsResult.error
   });
 }
@@ -509,7 +657,7 @@ async function findAuthStudentByEmail(body: Record<string, unknown>, req: ApiReq
       console.error("Exact student auth lookup failed.", { message: error.message, status: error.status });
       return res.status(502).json({ message: `Supabase Auth lookup failed: ${error.message}` });
     }
-    const authUser = data.users.find((user) => user.email?.toLowerCase() === email);
+    const authUser = (data.users as Array<{ id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> }>).find((user) => user.email?.toLowerCase() === email);
     if (authUser) {
       const metadata = authUser.user_metadata && typeof authUser.user_metadata === "object"
         ? authUser.user_metadata as Record<string, unknown>
@@ -559,7 +707,7 @@ async function findAuthStudentById(body: Record<string, unknown>, req: ApiReques
       console.error("Exact auth Student ID lookup failed.", { message: error.message, status: error.status });
       return res.status(502).json({ message: `Supabase Auth lookup failed: ${error.message}` });
     }
-    const authUser = data.users.find((user) => {
+    const authUser = (data.users as Array<{ id: string; email?: string; user_metadata?: Record<string, unknown>; app_metadata?: Record<string, unknown> }>).find((user) => {
       const metadata = user.user_metadata && typeof user.user_metadata === "object"
         ? user.user_metadata as Record<string, unknown>
         : {};
@@ -1198,6 +1346,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     const action = cleanText(body.action);
     if (action === "admin-login") return await loginTutor(body, res);
     if (action === "submit-review") return await submitLessonReview(body, res);
+    if (action === "request-bookings") return await requestStudentBookings(body, req, res);
+    if (action === "request-booking-change") return await requestStudentBookingChange(body, req, res);
+    if (action === "update-booking-status") return await updateAdminBooking(body, req, res);
+    if (action === "mark-lesson-note-sent") return await markLessonNoteSent(body, req, res);
     if (action === "approve-review") return await approveLessonReview(body, req, res);
     if (action === "save-availability") return await saveAvailability(body, req, res);
     if (action === "delete-availability") return await deleteAvailability(body, req, res);

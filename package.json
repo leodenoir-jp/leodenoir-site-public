@@ -7,6 +7,7 @@
   "scripts": {
     "test:tarot": "tsc -p tsconfig.tarot-api.json && node --test scripts/tarot.test.mjs",
     "test:reviews": "node --test scripts/lesson-reviews.test.mjs",
+    "test:learning-db": "node --test scripts/learning-db-sync.test.mjs",
     "test:payments": "node --test scripts/payment-methods.test.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
